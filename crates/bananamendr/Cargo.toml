@@ -1,0 +1,35 @@
+# this_file: crates/bananamendr/Cargo.toml
+[package]
+name = "bananamendr"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "CPU inference for BananaMind-2 (Nano/Mini/Pro) decoder checkpoints, with a CLI"
+readme = "README.md"
+keywords = ["llm", "inference", "safetensors", "transformer", "cpu"]
+categories = ["science", "command-line-utilities", "text-processing"]
+include = ["/Cargo.toml", "/README.md", "/src/**/*.rs", "/examples/**/*.rs"]
+
+[lib]
+name = "bananamendr"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bananamendr"
+path = "src/main.rs"
+
+[dependencies]
+memmap2.workspace = true
+rayon.workspace = true
+safetensors.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokenizers.workspace = true
+# CLI only; kept in the same crate so `cargo install bananamendr` ships the binary.
+anyhow.workspace = true
+clap.workspace = true

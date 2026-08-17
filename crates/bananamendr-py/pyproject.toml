@@ -1,0 +1,47 @@
+# this_file: crates/bananamendr-py/pyproject.toml
+[build-system]
+requires = ["maturin>=1.9,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "bananamendr"
+description = "Local CPU inference for BananaMind-2 chat checkpoints (Rust core, no PyTorch at runtime)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Rust",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = ["llm", "inference", "safetensors", "cpu", "rust"]
+dynamic = ["version"]
+
+[[project.authors]]
+name = "Adam Twardoch"
+email = "adam+github@twardoch.com"
+
+[project.urls]
+Homepage = "https://github.com/twardoch/bananamend"
+Repository = "https://github.com/twardoch/bananamend.git"
+Issues = "https://github.com/twardoch/bananamend/issues"
+Changelog = "https://github.com/twardoch/bananamend/blob/main/CHANGELOG.md"
+
+[tool.maturin]
+module-name = "bananamendr"
+features = ["pyo3/extension-module"]
+
+# Present so `uvx --with hatch-vcs hatchling version` can report the
+# tag-derived version during release verification; maturin takes the real
+# version from Cargo.toml.
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = "../.."

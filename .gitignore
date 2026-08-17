@@ -1,0 +1,66 @@
+# Private working area: prototypes, reference material, experiment inputs and
+# outputs. Nothing here is published.
+/_priv/
+/ref/
+
+# Downloaded checkpoints (weights live in the Hugging Face cache, not here)
+/ref/
+*.safetensors
+
+# Secrets
+.env
+
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+/.venv/
+venv/
+env/
+/dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.benchmarks/
+.coverage
+
+# Agent and tooling state (project-scoped skills are the deliberate exception)
+.omc/
+!.omc/skills/
+.codegraph/
+.specstory/
+
+# Logs and build reports
+build.log.txt
+release.log.txt
+*.log
+
+# Editors
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+.cache/
+.envrc
+.direnv/

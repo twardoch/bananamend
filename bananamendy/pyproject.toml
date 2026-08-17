@@ -1,0 +1,64 @@
+# this_file: bananamendy/pyproject.toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bananamendy"
+version = "0.1.0"
+description = "CLI and OpenAI-compatible server for local CPU inference on BananaMind-2 checkpoints"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Framework :: FastAPI",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = ["llm", "inference", "openai", "server", "cli", "huggingface"]
+dependencies = [
+  "bananamendr==0.1.0",
+  "fire>=0.6",
+  "huggingface-hub>=0.26",
+  "platformdirs>=4.2",
+  "tomli-w>=1.0",
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+  "pydantic>=2.7",
+]
+
+[[project.authors]]
+name = "Adam Twardoch"
+email = "adam+github@twardoch.com"
+
+[project.urls]
+Homepage = "https://github.com/twardoch/bananamend"
+Repository = "https://github.com/twardoch/bananamend.git"
+Issues = "https://github.com/twardoch/bananamend/issues"
+Changelog = "https://github.com/twardoch/bananamend/blob/main/CHANGELOG.md"
+
+[project.scripts]
+bananamendy = "bananamendy.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "httpx>=0.27"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bananamendy"]
+
+# Local development only. Release builds run `uv build --no-sources`, so the
+# published metadata keeps the plain `bananamendr==<version>` requirement.
+[tool.uv.sources]
+bananamendr = { path = "../crates/bananamendr-py", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

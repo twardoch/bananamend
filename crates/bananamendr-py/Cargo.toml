@@ -1,0 +1,23 @@
+# this_file: crates/bananamendr-py/Cargo.toml
+[package]
+name = "bananamendr-py"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Python bindings for bananamendr"
+# The extension module is distributed as a PyPI wheel built by maturin; a
+# crates.io copy would be unusable as a Rust dependency.
+publish = false
+
+[lib]
+name = "bananamendr"
+crate-type = ["cdylib"]
+
+[dependencies]
+bananamendr.workspace = true
+# `extension-module` is enabled per build by maturin, not here: as a default it
+# breaks plain `cargo build`, `cargo test` and `cargo publish` verification.
+pyo3 = { version = "0.29", features = ["abi3-py39"] }
