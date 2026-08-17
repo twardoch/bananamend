@@ -29,6 +29,12 @@ pub struct Info {
     pub bos_token_id: u32,
     pub eos_token_id: u32,
     pub tokenizer_vocab_size: usize,
+    /// The form of each part: `float32`, `int8` or `ternary`, and how many
+    /// matrices hold each form.
+    pub storage: Vec<(String, String)>,
+    /// The bytes that the weights need in memory. A quantized checkpoint keeps
+    /// its codes, so this number stays near the size of the file.
+    pub weight_bytes: usize,
 }
 
 /// The result of a generation.
@@ -163,6 +169,8 @@ impl Model {
             bos_token_id: c.bos_token_id,
             eos_token_id: c.eos_token_id,
             tokenizer_vocab_size: self.pipeline.tokenizer.vocab_size(),
+            storage: self.pipeline.model.storage(),
+            weight_bytes: self.pipeline.model.weight_bytes(),
         };
         serde_wasm_bindgen::to_value(&info).map_err(|e| JsValue::from_str(&e.to_string()))
     }

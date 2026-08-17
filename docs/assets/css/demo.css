@@ -159,3 +159,19 @@
 .milkwash-demo [hidden] {
   display: none !important;
 }
+
+/* The picker: a wide control for a repository name, and a line of prose under
+   it that describes the choice. */
+.bananamend-demo .demo-wide,
+.milkwash-demo .demo-wide {
+  flex: 1 1 22rem;
+  min-width: 14rem;
+}
+
+.bananamend-demo .demo-note,
+.milkwash-demo .demo-note {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  opacity: 0.85;
+}

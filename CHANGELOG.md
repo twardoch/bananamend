@@ -8,12 +8,27 @@ this_file: CHANGELOG.md
 
 ### Added
 
+- The demonstration page now holds a list of checkpoints, and a field for a
+  repository of your own. It frees the previous model before it loads the next
+  one, and it reports the form of the weights and the memory that they need.
+- `Model.info()` in the WebAssembly module reports `storage` and `weight_bytes`,
+  which is what the page shows.
+- `fontlab/BananaMind-2-Mini-Chat-int8`: the third model in 8 bits.
+
 - `bananamendy info` now reports the form of each part of the model and the number
   of bytes that the weights need in memory, so the claim that a quantized
   checkpoint stays small while it runs is checkable. `bananamendr.Model` gained
   `storage` and `weight_bytes` for the same reason.
 - A model card can hold an example of what the checkpoint writes
   (`bananamendy push --sample`). The two research checkpoints use it.
+
+### Fixed
+
+- The demonstration page used `requestAnimationFrame` before a generation. A
+  browser stops those calls in a tab that nobody looks at, and the generation
+  then never started. A short timer replaces it.
+- The sizes of the three models in the documentation were wrong: Mini is 101 MB
+  and Pro is 556 MB, and not 230 MB and 1.1 GB.
 
 ### Changed
 

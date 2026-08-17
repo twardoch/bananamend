@@ -8,7 +8,7 @@ nav_order: 1
 # bananamend
 
 bananamend runs the **BananaMind-2** chat models on your own computer. The models
-are small: Nano is 40 MB, Mini is 230 MB, and Pro (Preview) is 1.1 GB.
+are small: Nano is 40 MB, Mini is 101 MB, and Pro (Preview) is 556 MB.
 
 The engine is Rust. It reads the published `model.safetensors` and
 `tokenizer.json` directly, so there is no conversion step and no second copy of

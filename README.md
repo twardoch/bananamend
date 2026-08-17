@@ -7,7 +7,7 @@ this_file: README.md
 **Local inference for the BananaMind-2 chat models. Rust engine, Python command
 line, a server with the OpenAI interface, and a build that runs in a browser.**
 
-The models are small: Nano is 40 MB, Mini is 230 MB, and Pro (Preview) is 1.1 GB.
+The models are small: Nano is 40 MB, Mini is 101 MB, and Pro (Preview) is 556 MB.
 The engine reads the published `model.safetensors` and `tokenizer.json` directly,
 so there is no conversion step and no second copy of the weights. PyTorch is not
 necessary at any time.
@@ -170,6 +170,8 @@ bananamendy chat --name fontlab/BananaMind-2-Pro-Preview-Chat-int8 --prompt "Hi"
 | Nano | 8 bits | 10.6 MB (3.8×) | 10.6 MB | 302 tokens/s | 97.9% | 67.2 against 66.3 (1.01×) | 4 of 8 |
 | Nano | mixed (3 ternary) | 10.5 MB (3.8×) | 10.5 MB | 261 tokens/s | 96.8% | 67.5 against 66.3 (1.02×) | 3 of 8 |
 | Nano | ternary (70) | 5.2 MB (7.7×) | 5.2 MB | 34 tokens/s | 22.1% | 709.9 against 66.3 (10.7×) | 0 of 8 |
+| Mini (25 M) | floats | 100.7 MB | 100.7 MB | 234 tokens/s | this is the reference | 49.1 | this is the reference |
+| Mini | 8 bits | 26.8 MB (3.8×) | 26.8 MB | 153 tokens/s | 96.8% | 49.5 against 49.1 (1.01×) | 7 of 8 |
 | Pro (139 M) | floats | 555.9 MB | 555.9 MB | 71 tokens/s | this is the reference | 33.3 | this is the reference |
 | Pro | 8 bits | 147.8 MB (3.8×) | 147.8 MB | 54 tokens/s | 100.0% | 33.3 against 33.3 (1.00×) | 6 of 8 |
 | Pro | mixed (12 ternary) | 144.9 MB (3.8×) | 144.9 MB | 46 tokens/s | 90.5% | 33.3 against 33.3 (1.00×) | 3 of 8 |

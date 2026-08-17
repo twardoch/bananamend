@@ -13,8 +13,10 @@ that the command line program uses. Greedy decoding gives the same tokens as the
 program on your computer, and a test in the repository proves it.
 
 {: .warning }
-> The page downloads the Nano model from Hugging Face. That is approximately
-> 40 MB. Your browser keeps the download in its cache, so a second visit is fast.
+> The page downloads the checkpoint that you choose from Hugging Face. The
+> smallest is 6 MB and the largest is 556 MB. Your browser keeps the download in
+> its cache, so a second visit to the same checkpoint is fast. Start with
+> **Nano · 8 bits**, which is 11 MB.
 
 {: .note }
 > The engine has one thread here, and it runs on the thread of the page. Because
@@ -28,29 +30,43 @@ program on your computer, and a test in the repository proves it.
 
 <div id="demo" class="bananamend-demo" data-theme="dark">
 
-  <div class="card bg-base-200 card-border border-base-300">
-    <div class="card-body">
-      <div class="demo-row">
-        <button id="load" type="button" class="btn btn-primary">
-          Download the model and start
-        </button>
-        <span id="status" role="status" class="badge badge-ghost badge-lg demo-status">
-          The model is not loaded.
-        </span>
-      </div>
-      <div class="demo-row" id="progressBox" hidden>
-        <progress id="progress" class="progress progress-primary" max="100" value="0"></progress>
-        <span id="progressText" class="demo-mono"></span>
-      </div>
-      <div class="stats stats-horizontal demo-stats" id="info" hidden>
-        <div class="stat"><div class="stat-title">Model</div><div class="stat-value demo-stat-value" id="modelType">—</div></div>
-        <div class="stat"><div class="stat-title">Layers</div><div class="stat-value demo-stat-value" id="layers">—</div></div>
-        <div class="stat"><div class="stat-title">Hidden</div><div class="stat-value demo-stat-value" id="hidden">—</div></div>
-        <div class="stat"><div class="stat-title">Vocabulary</div><div class="stat-value demo-stat-value" id="vocab">—</div></div>
-        <div class="stat"><div class="stat-title">Context</div><div class="stat-value demo-stat-value" id="context">—</div></div>
-        <div class="stat"><div class="stat-title">Version</div><div class="stat-value demo-stat-value" id="version">—</div></div>
-      </div>
+  <fieldset class="fieldset bg-base-200 border-base-300 rounded-box border p-4">
+    <legend class="fieldset-legend">Choose a checkpoint</legend>
+
+    <div class="demo-row">
+      <label class="demo-label" for="model">Checkpoint</label>
+      <select id="model" class="select select-bordered select-sm demo-wide"></select>
     </div>
+
+    <div class="demo-row">
+      <label class="demo-label" for="custom">Or any repository on Hugging Face</label>
+      <input id="custom" class="input input-bordered input-sm demo-wide" type="text"
+             placeholder="owner/name — leave empty to use the list above" spellcheck="false">
+    </div>
+
+    <p id="modelNote" class="demo-note"></p>
+
+    <div class="demo-row">
+      <button id="load" type="button" class="btn btn-primary">Download and start</button>
+      <span id="status" role="status" class="badge badge-ghost badge-lg demo-status">
+        Select a checkpoint and use the button.
+      </span>
+    </div>
+
+    <div class="demo-row" id="progressBox" hidden>
+      <progress id="progress" class="progress progress-primary" max="100" value="0"></progress>
+      <span id="progressText" class="demo-mono"></span>
+    </div>
+  </fieldset>
+
+  <div class="stats stats-horizontal demo-stats" id="info" hidden>
+    <div class="stat"><div class="stat-title">Loaded</div><div class="stat-value demo-stat-value" id="loadedName">—</div></div>
+    <div class="stat"><div class="stat-title">Model</div><div class="stat-value demo-stat-value" id="modelType">—</div></div>
+    <div class="stat"><div class="stat-title">Layers × hidden</div><div class="stat-value demo-stat-value" id="layers">—</div></div>
+    <div class="stat"><div class="stat-title">Weights in memory</div><div class="stat-value demo-stat-value" id="weights">—</div></div>
+    <div class="stat"><div class="stat-title">Form</div><div class="stat-value demo-stat-value" id="form">—</div></div>
+    <div class="stat"><div class="stat-title">Context</div><div class="stat-value demo-stat-value" id="context">—</div></div>
+    <div class="stat"><div class="stat-title">Engine</div><div class="stat-value demo-stat-value" id="version">—</div></div>
   </div>
 
   <fieldset id="controls" class="fieldset bg-base-200 border-base-300 rounded-box border p-4" disabled>
@@ -108,13 +124,36 @@ program on your computer, and a test in the repository proves it.
 
 ## What the page does
 
-1. It downloads four files from Hugging Face: `config.json`, `tokenizer.json`,
-   `tokenizer_config.json` and `model.safetensors`.
+1. It downloads four files from the repository that you choose: `config.json`,
+   `tokenizer.json`, `tokenizer_config.json` and `model.safetensors`. The third
+   one is optional.
 2. It gives the four parts to `Model.fromParts`, which builds the engine.
 3. It sends your text through the same code as the command line program.
 
-Nothing goes to a server of this site. The only network requests are the four
+Nothing goes to a server of this site. The only network requests are the
 downloads from Hugging Face.
+
+## The checkpoints in the list
+
+The list holds the three original checkpoints and the quantized copies of them.
+A quantized copy is smaller both to download and to hold in memory, because the
+engine keeps the codes and rebuilds each value inside the multiplication. The
+table under [Small checkpoints](../quantization/) gives the measured quality of
+each one.
+
+The two `ternary everywhere` entries do not work. They are in the list because the
+measurement is the point: a model of this size cannot carry ternary weights in
+every matrix, and the page lets you see what that looks like.
+
+**Your own repository works as well.** Write `owner/name` in the field under the
+list. The repository needs `config.json`, `tokenizer.json` and
+`model.safetensors`, and the architecture must be one that this engine knows.
+
+{: .note }
+> A browser gives the module 4 GB of memory, and the engine needs approximately
+> three times the size of the file while it reads a checkpoint. The 556 MB Pro
+> checkpoint of 32-bit floats is therefore near the limit; its 8-bit copy of
+> 150 MB is not.
 
 ## Temperature 0 is greedy
 

@@ -83,8 +83,8 @@ python -m pytest bananamendy/tests -q
 | Alias | Hugging Face repository | Size |
 |:------|:------------------------|:-----|
 | `nano` | `BananaMind/BananaMind-2-Nano-Chat` | 40 MB |
-| `mini` | `BananaMind/BananaMind-2-Mini-Chat` | 230 MB |
-| `pro` | `BananaMind/BananaMind-2-Pro-Preview-Chat` | 1.1 GB |
+| `mini` | `BananaMind/BananaMind-2-Mini-Chat` | 101 MB |
+| `pro` | `BananaMind/BananaMind-2-Pro-Preview-Chat` | 556 MB |
 
 ```bash
 bananamendy pull nano
