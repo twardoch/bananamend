@@ -59,11 +59,18 @@ class Engine:
 
     def info(self, name: str) -> dict[str, Any]:
         loaded = self.load(name)
+        # `storage` and `weight_bytes` describe the form of the weights. A
+        # quantized checkpoint keeps its codes in memory, and the number then
+        # shows the real saving.
+        storage = dict(getattr(loaded.model, "storage", {}) or {})
+        weight_bytes = int(getattr(loaded.model, "weight_bytes", 0) or 0)
         return {
             "name": loaded.checkpoint.name,
             "path": str(loaded.checkpoint.path),
             "repo_id": loaded.checkpoint.repo_id,
             **loaded.config,
+            "storage": storage,
+            "weight_mb": round(weight_bytes / 1e6, 2),
         }
 
     def generate(self, name: str, prompt: str, **sampling: Any) -> Any:

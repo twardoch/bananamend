@@ -153,9 +153,15 @@ The Python side is four files:
   calibration text and the measurement text must stay different.
 
 **The finding, so that nobody repeats the work:** ternary weights everywhere give
-22% next-token agreement on Nano and a perplexity ten times higher. Eight bits
-give 98% to 100% and a perplexity within 1%. Do not present a fully ternary
-checkpoint of these models as usable.
+22% next-token agreement on Nano and 41% on Pro, with a perplexity 3 to 10 times
+higher. Eight bits give 98% to 100% and a perplexity within 1%. Do not present a
+fully ternary checkpoint of these models as usable. The default of
+`bananamendy quantize` is therefore `int8`.
+
+A quantized projection also costs speed, because a code becomes a value inside
+the multiplication: Pro goes from 71 to 54 tokens each second in 8 bits, and to 11
+in ternary. `Matrix::matvec` spreads the rows over the Rayon pool exactly as the
+float path does; without that the loss was much larger.
 
 ## The WebAssembly module and the site
 

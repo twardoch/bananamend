@@ -492,3 +492,43 @@ def test_the_engine_refuses_a_method_that_it_does_not_know(tmp_path):
     (broken / "config.json").write_text(json.dumps(config), encoding="utf-8")
     with pytest.raises(Exception, match="future-v9"):
         bananamendr.Model(str(broken))
+
+
+def test_the_engine_reports_the_form_and_the_memory(tmp_path):
+    """The claim "the memory in use is as small as the file" must be checkable."""
+    import bananamendr
+
+    source = complete_checkpoint(tmp_path)
+    float_model = bananamendr.Model(str(source))
+    assert dict(float_model.storage)["embedding"] == "float32"
+
+    quantized = tmp_path / "reported"
+    plan = {n: ("ternary" if "attn" in n else "int8") for n in _matrix_names()}
+    plan["transformer.wte.weight"] = "int8"
+    quantize_checkpoint(source, quantized, group_size=8, plan=plan)
+    small = bananamendr.Model(str(quantized))
+    storage = dict(small.storage)
+
+    assert storage["embedding"] == "int8"
+    assert int(storage["matrices_ternary"]) == 8, storage
+    assert int(storage["matrices_int8"]) == 6, storage
+    assert small.weight_bytes < float_model.weight_bytes
+
+    # The weights in memory must be near the size of the file, because the engine
+    # keeps the codes and does not rebuild the matrix.
+    file_bytes = (quantized / "model.safetensors").stat().st_size
+    assert small.weight_bytes <= file_bytes
+
+
+def test_a_ternary_checkpoint_holds_less_than_an_eight_bit_one(tmp_path):
+    import bananamendr
+
+    source = complete_checkpoint(tmp_path)
+    sizes = {}
+    for grid in ("int8", "ternary"):
+        directory = tmp_path / f"size-{grid}"
+        quantize_checkpoint(
+            source, directory, group_size=8, plan={n: grid for n in _matrix_names()}
+        )
+        sizes[grid] = bananamendr.Model(str(directory)).weight_bytes
+    assert sizes["ternary"] < sizes["int8"]

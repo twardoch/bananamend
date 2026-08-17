@@ -13,7 +13,16 @@
 //! weights. `bananamendy quantize` writes these arrays, and
 //! `bananamendy/src/bananamendy/quantize.py` documents how it chooses them.
 
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
+
 use crate::error::Error;
+
+/// Below this many multiply-accumulates a quantized projection stays on the
+/// calling thread. The value follows `ops::matvec`, which uses the same rule for
+/// 32-bit floats.
+#[cfg(feature = "parallel")]
+const PARALLEL_MAC_THRESHOLD: usize = 1 << 18;
 
 /// The name of the ternary method in `config.json`.
 pub const TERNARY_METHODS: [&str; 2] = ["ternary-twn-v1", "ternary-gptq-v1"];
@@ -215,9 +224,37 @@ impl Matrix {
     }
 
     /// `out[i] = dot(row i, x)`.
+    ///
+    /// The rows are independent, so a large projection is spread over the Rayon
+    /// pool, exactly as the projection of 32-bit floats is. Without that, a
+    /// quantized checkpoint would run on one thread and lose more time than the
+    /// smaller memory saves.
     pub fn matvec(&self, out: &mut [f32], x: &[f32]) {
+        #[cfg(feature = "parallel")]
+        {
+            let macs = out.len() * self.cols();
+            if !matches!(self, Matrix::Dense { .. }) && macs >= PARALLEL_MAC_THRESHOLD {
+                let rows_per_task = ((1 << 15) / self.cols().max(1)).max(1);
+                out.par_chunks_mut(rows_per_task)
+                    .enumerate()
+                    .for_each(|(chunk, rows)| {
+                        let first = chunk * rows_per_task;
+                        for (offset, value) in rows.iter_mut().enumerate() {
+                            *value = self.row_dot(first + offset, x);
+                        }
+                    });
+                return;
+            }
+        }
+        self.matvec_serial(out, x)
+    }
+
+    /// The dot product of one row with `x`.
+    pub fn row_dot(&self, row: usize, x: &[f32]) -> f32 {
         match self {
-            Matrix::Dense { data, .. } => crate::ops::matvec(out, data, x),
+            Matrix::Dense { cols, data, .. } => {
+                crate::ops::dot(&data[row * cols..(row + 1) * cols], x)
+            }
             Matrix::Int8 {
                 cols,
                 group,
@@ -226,22 +263,18 @@ impl Matrix {
                 scale,
                 ..
             } => {
-                for (row, value) in out.iter_mut().enumerate() {
-                    let row_codes = &codes[row * cols..(row + 1) * cols];
-                    let row_scale = &scale[row * groups..(row + 1) * groups];
-                    let mut total = 0.0f32;
-                    // One scale for each group, so the sum of a group needs only
-                    // one multiplication at the end.
-                    for (index, chunk) in row_codes.chunks(*group).enumerate() {
-                        let offset = index * group;
-                        let mut inner = 0.0f32;
-                        for (i, &code) in chunk.iter().enumerate() {
-                            inner += code as f32 * x[offset + i];
-                        }
-                        total += inner * row_scale[index.min(groups - 1)];
+                let row_codes = &codes[row * cols..(row + 1) * cols];
+                let row_scale = &scale[row * groups..(row + 1) * groups];
+                let mut total = 0.0f32;
+                for (index, chunk) in row_codes.chunks(*group).enumerate() {
+                    let offset = index * group;
+                    let mut inner = 0.0f32;
+                    for (i, &code) in chunk.iter().enumerate() {
+                        inner += code as f32 * x[offset + i];
                     }
-                    *value = total;
+                    total += inner * row_scale[index.min(groups - 1)];
                 }
+                total
             }
             Matrix::Ternary {
                 cols,
@@ -252,28 +285,35 @@ impl Matrix {
                 scale_negative,
                 ..
             } => {
-                for (row, value) in out.iter_mut().enumerate() {
-                    let base = row * cols;
-                    let row_positive = &scale_positive[row * groups..(row + 1) * groups];
-                    let row_negative = &scale_negative[row * groups..(row + 1) * groups];
-                    let mut total = 0.0f32;
-                    for index in 0..*groups {
-                        let start = index * group;
-                        let end = (start + group).min(*cols);
-                        // A ternary weight adds or subtracts the input, so the
-                        // two sums need no multiplication inside the loop.
-                        let mut positive = 0.0f32;
-                        let mut negative = 0.0f32;
-                        for (offset, &value) in x[start..end].iter().enumerate() {
-                            match Self::ternary_code(codes, base + start + offset) {
-                                1 => positive += value,
-                                -1 => negative += value,
-                                _ => {}
-                            }
+                let base = row * cols;
+                let row_positive = &scale_positive[row * groups..(row + 1) * groups];
+                let row_negative = &scale_negative[row * groups..(row + 1) * groups];
+                let mut total = 0.0f32;
+                for index in 0..*groups {
+                    let start = index * group;
+                    let end = (start + group).min(*cols);
+                    let mut positive = 0.0f32;
+                    let mut negative = 0.0f32;
+                    for (offset, &value) in x[start..end].iter().enumerate() {
+                        match Self::ternary_code(codes, base + start + offset) {
+                            1 => positive += value,
+                            -1 => negative += value,
+                            _ => {}
                         }
-                        total += positive * row_positive[index] - negative * row_negative[index];
                     }
-                    *value = total;
+                    total += positive * row_positive[index] - negative * row_negative[index];
+                }
+                total
+            }
+        }
+    }
+
+    fn matvec_serial(&self, out: &mut [f32], x: &[f32]) {
+        match self {
+            Matrix::Dense { data, .. } => crate::ops::matvec(out, data, x),
+            _ => {
+                for (row, value) in out.iter_mut().enumerate() {
+                    *value = self.row_dot(row, x);
                 }
             }
         }

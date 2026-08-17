@@ -38,6 +38,7 @@ def build_card(
     licence: str = "apache-2.0",
     producer_version: str = "",
     research_only: bool = False,
+    sample: str = "",
 ) -> str:
     """Writes the model card. The numbers come from the two reports.
 
@@ -55,8 +56,11 @@ def build_card(
     lines.append("pipeline_tag: text-generation")
     lines.append("tags:")
     lines.append("- quantized")
-    lines.append("- ternary")
-    lines.append("- int8")
+    # The tags must describe this file, and not the tool that made it.
+    if ternary:
+        lines.append("- ternary")
+    if int8 or not ternary:
+        lines.append("- int8")
     lines.append("- bananamend")
     if research_only:
         lines.append("- research-only")
@@ -78,6 +82,13 @@ def build_card(
             "the size of a fully ternary checkpoint is visible. For work, use the "
             "`-int8` or the `-mixed` checkpoint of the same model."
         )
+        lines.append("")
+    if sample:
+        lines.append("What it writes for `Name one ocean.`, with a temperature of zero:")
+        lines.append("")
+        lines.append("```")
+        lines.append(sample.strip())
+        lines.append("```")
         lines.append("")
     lines.append(
         f"A quantized copy of [{base_model}](https://huggingface.co/{base_model}), "

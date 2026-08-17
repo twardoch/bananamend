@@ -62,7 +62,11 @@ class Cli:
         return str(resolve(name or self._settings.model, download=False).path)
 
     def info(self, name: str | None = None) -> dict[str, Any]:
-        """Architecture and tokenizer facts, straight from the checkpoint."""
+        """Architecture and tokenizer facts, straight from the checkpoint.
+
+        For a quantized checkpoint the answer also holds the form of each part
+        and the number of bytes that the weights need in memory.
+        """
         return self._engine.info(name or self._settings.model)
 
     # ---- inference -----------------------------------------------------
@@ -183,7 +187,7 @@ class Cli:
         self,
         out: str,
         name: str | None = None,
-        method: str = "mixed",
+        method: str = "int8",
         group_size: int = 64,
         kl_budget: float = 0.02,
         embedding: bool = True,
@@ -193,10 +197,11 @@ class Cli:
 
         `method` is `mixed`, `int8` or `ternary`:
 
+        * `int8` gives 8-bit weights to every matrix. It loses almost nothing,
+          and it is the default.
         * `mixed` gives ternary weights to the matrices that a measurement shows
-          can carry them, and 8-bit weights to the rest. This is the default,
-          and it is the only method that keeps the quality of a small model.
-        * `int8` gives 8-bit weights to every matrix. It loses almost nothing.
+          can carry them, and 8-bit weights to the rest. The file is only a
+          little smaller than `int8`, and the answers change more.
         * `ternary` gives ternary weights to every matrix. Use it only to see
           what the model does then; the answers of a small model become useless.
 
@@ -293,6 +298,7 @@ class Cli:
         private: bool = False,
         card_only: bool = False,
         research_only: bool = False,
+        sample: str = "",
     ) -> str:
         """Writes a model card and sends a quantized checkpoint to Hugging Face.
 
@@ -313,6 +319,7 @@ class Cli:
             quality=quality,
             producer_version=__version__,
             research_only=research_only,
+            sample=sample,
         )
         write_card(path, card)
         if card_only:

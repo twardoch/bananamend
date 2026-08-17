@@ -137,6 +137,23 @@ impl Model {
         Ok(d)
     }
 
+    /// The form of each part of the model: `float32`, `int8` or `ternary`.
+    #[getter]
+    fn storage<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let d = PyDict::new(py);
+        for (part, kind) in self.pipeline.model.storage() {
+            d.set_item(part, kind)?;
+        }
+        Ok(d)
+    }
+
+    /// Bytes that the weights need in memory. A quantized checkpoint keeps its
+    /// codes, so this number stays near the size of the file.
+    #[getter]
+    fn weight_bytes(&self) -> usize {
+        self.pipeline.model.weight_bytes()
+    }
+
     /// Encodes text exactly as `transformers` would, without adding BOS.
     fn tokenize(&self, text: &str) -> PyResult<Vec<u32>> {
         self.pipeline.tokenizer.encode(text).map_err(to_py_err)

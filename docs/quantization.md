@@ -49,31 +49,53 @@ close to the float model, and the file is approximately 3.8 times smaller.
 can carry them, and 8-bit weights to the rest. The file is a little smaller than
 `int8`, and the answers change more. `--kl_budget` controls the trade.
 
-`--method ternary` gives ternary weights to every matrix. The file is
-approximately 7.7 times smaller, and the answers of these small models are not
-useful. The method is here for measurement, and the results are below.
+`--method ternary` gives ternary weights to every matrix. The file is 7.7 to 8.3
+times smaller, and the answers of these small models are not useful. The method is
+here for measurement, and the results are below.
 
 ## Measured results
 
 The measurement compares the quantized checkpoint with the float checkpoint on a
 text that the quantizer never sees. Both sides run in the engine.
 
-| Checkpoint | Method | Size | Same next token | Perplexity | Identical greedy answers |
-|:-----------|:-------|:-----|:----------------|:-----------|:-------------------------|
-| Nano (10 M) | 8 bits | 39.9 → 10.6 MB (3.8×) | 97.9% | 67.2 against 66.3 | 4 of 8 |
-| Nano | mixed | 39.9 → 10.4 MB (3.8×) | 93.7% | 68.7 against 66.3 | 1 of 8 |
-| Nano | ternary | 39.9 → 5.2 MB (7.7×) | 22.1% | 709.9 against 66.3 | 0 of 8 |
-| Pro (139 M) | 8 bits | 555.9 → 147.8 MB (3.8×) | 100.0% | 33.3 against 33.3 | 6 of 8 |
-| Pro | mixed | 555.9 → 144.9 MB (3.8×) | 90.5% | 33.3 against 33.3 | 3 of 8 |
+| Checkpoint | Method | File | Weights in memory | Speed | Same next token | Perplexity | Identical greedy answers |
+|:-----------|:-------|:-----|:------------------|:------|:----------------|:-----------|:-------------------------|
+| Nano (10 M) | floats | 39.9 MB | 39.9 MB | 611 tokens/s | — | 66.3 | — |
+| Nano | 8 bits | 10.6 MB (3.8×) | 10.6 MB | 302 tokens/s | 97.9% | 67.2 | 4 of 8 |
+| Nano | mixed (3 ternary) | 10.5 MB (3.8×) | 10.5 MB | 261 tokens/s | 96.8% | 67.5 | 3 of 8 |
+| Nano | ternary (70) | 5.2 MB (7.7×) | 5.2 MB | 34 tokens/s | 22.1% | 709.9 | 0 of 8 |
+| Pro (139 M) | floats | 555.9 MB | 555.9 MB | 71 tokens/s | — | 33.3 | — |
+| Pro | 8 bits | 147.8 MB (3.8×) | 147.8 MB | 54 tokens/s | 100.0% | 33.3 | 6 of 8 |
+| Pro | mixed (12 ternary) | 144.9 MB (3.8×) | 144.9 MB | 46 tokens/s | 90.5% | 33.3 | 3 of 8 |
+| Pro | ternary (168) | 66.7 MB (8.3×) | 66.7 MB | 11 tokens/s | 41.3% | 131.1 | 0 of 8 |
 
-The numbers say two things clearly.
+Speed is one thread group on an Apple M4 Max, greedy, 32 new tokens. The two
+ternary rows for Pro use 64 tokens of the measurement text, and the other rows
+use 96, so compare a perplexity only inside one model.
 
-**Eight bits are nearly free.** Pro in 8 bits selects the same next token every
-time in the measurement, and its perplexity moves by 0.1%.
+`bananamendy info --name <checkpoint>` reports the form and the memory, so those
+two columns are checkable:
 
-**Ternary weights everywhere do not work at this size.** The model still writes
-English, and it no longer answers the question. This is not a fault of the
-quantizer. The published work on ternary language models either trains the model
+```
+$ bananamendy info --name fontlab/BananaMind-2-Nano-Chat-int8
+storage:    {"embedding": "int8", "matrices_int8": "70"}
+weight_mb:  10.61
+```
+
+The numbers say three things clearly.
+
+**Eight bits are nearly free in quality.** Pro in 8 bits selects the same next
+token every time in the measurement, and its perplexity moves by 0.1%.
+
+**Eight bits are not free in speed.** A code becomes a value inside the
+multiplication, and that work costs time: Pro loses a quarter of its speed, and
+Nano loses half. A ternary checkpoint loses much more, because the two bits of
+each weight must be unpacked one at a time.
+
+**Ternary weights everywhere do not work at this size.** Nano writes
+`arararararong the the the hear hear hear`, and Pro writes
+`Engineererererererererer`. Both still produce English pieces, and neither answers
+the question. This is not a fault of the quantizer. The published work on ternary language models either trains the model
 with the ternary grid from the beginning (BitNet b1.58), or works on models above
 one billion parameters (PT-BitNet, PT²-LLM). Nano holds 10 million weights, and
 Pro holds 139 million.

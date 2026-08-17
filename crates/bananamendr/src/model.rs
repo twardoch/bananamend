@@ -148,14 +148,37 @@ impl Model {
     }
 
     /// The form of each part of the model, for a report to a user.
-    pub fn storage(&self) -> Vec<(&'static str, &'static str)> {
-        let mut out = vec![("embedding", self.wte.kind())];
+    ///
+    /// The embedding and the output matrix are named. The projections are
+    /// counted, because a checkpoint of mixed precision holds more than one
+    /// form and a single example would say the wrong thing.
+    pub fn storage(&self) -> Vec<(String, String)> {
+        let mut out = vec![("embedding".to_string(), self.wte.kind().to_string())];
         if let Some(head) = &self.lm_head {
-            out.push(("output", head.kind()));
+            out.push(("output".to_string(), head.kind().to_string()));
         }
-        if let Some(layer) = self.layers.first() {
-            out.push(("attention", layer.q_proj.kind()));
-            out.push(("mlp", layer.w_gate.kind()));
+        let mut counts = [("float32", 0usize), ("int8", 0usize), ("ternary", 0usize)];
+        for layer in &self.layers {
+            for matrix in [
+                &layer.q_proj,
+                &layer.k_proj,
+                &layer.v_proj,
+                &layer.o_proj,
+                &layer.w_gate,
+                &layer.w_up,
+                &layer.w_down,
+            ] {
+                for entry in counts.iter_mut() {
+                    if entry.0 == matrix.kind() {
+                        entry.1 += 1;
+                    }
+                }
+            }
+        }
+        for (kind, count) in counts {
+            if count > 0 {
+                out.push((format!("matrices_{kind}"), count.to_string()));
+            }
         }
         out
     }

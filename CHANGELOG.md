@@ -8,6 +8,30 @@ this_file: CHANGELOG.md
 
 ### Added
 
+- `bananamendy info` now reports the form of each part of the model and the number
+  of bytes that the weights need in memory, so the claim that a quantized
+  checkpoint stays small while it runs is checkable. `bananamendr.Model` gained
+  `storage` and `weight_bytes` for the same reason.
+- A model card can hold an example of what the checkpoint writes
+  (`bananamendy push --sample`). The two research checkpoints use it.
+
+### Changed
+
+- The default of `bananamendy quantize` is now `int8`, and not `mixed`. `mixed` is
+  only a little smaller and it changes more answers, so it must be a choice.
+- `Matrix::matvec` spreads the rows of a quantized projection over the Rayon pool,
+  as the float path already did. Before this change a quantized checkpoint ran on
+  one thread.
+- The tags of a model card describe the file: an 8-bit checkpoint is no longer
+  tagged `ternary`.
+- The threshold search of the ternary grid starts at 0.05 instead of 0.20 times
+  the mean absolute value. A group of a few large weights and many small ones
+  needs that.
+- Measured numbers for every variant, including speed, are now in the
+  documentation.
+
+### Added
+
 - A WebAssembly build. `bananamendr-wasm` runs the engine in a browser. The crate
   is not published, because a WebAssembly module has no use as a Rust dependency.
 - `Pipeline::from_parts`, `Weights::from_bytes` and `Tokenizer::from_json`. These
