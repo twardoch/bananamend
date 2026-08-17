@@ -20,7 +20,7 @@ crate-type = ["cdylib", "rlib"]
 # No files and no threads in a browser, so both features go away. The tokenizer
 # then needs `unstable_wasm`, which replaces the C library for regular
 # expressions with a Rust one.
-bananamendr = { path = "../bananamendr", version = "=1.0.3", default-features = false, features = ["wasm"] }
+bananamendr = { path = "../bananamendr", version = "=1.0.4", default-features = false, features = ["wasm"] }
 serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 wasm-bindgen = "0.2"
