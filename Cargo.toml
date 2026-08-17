@@ -4,7 +4,7 @@ resolver = "2"
 members = ["crates/bananamendr", "crates/bananamendr-py", "crates/bananamendr-wasm"]
 
 [workspace.package]
-version = "1.0.2"
+version = "1.0.3"
 edition = "2024"
 rust-version = "1.87"
 license = "Apache-2.0"
@@ -13,7 +13,7 @@ homepage = "https://github.com/twardoch/bananamend"
 authors = ["Adam Twardoch <adam+github@twardoch.com>"]
 
 [workspace.dependencies]
-bananamendr = { path = "crates/bananamendr", version = "=1.0.2" }
+bananamendr = { path = "crates/bananamendr", version = "=1.0.3" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 memmap2 = "0.9"
