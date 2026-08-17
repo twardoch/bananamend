@@ -12,30 +12,34 @@ use std::path::Path;
 
 use crate::config::Config;
 use crate::error::Error;
+use crate::matrix::Matrix;
 use crate::ops::{self, RopeTable};
 use crate::weights::Weights;
 
 struct Layer {
     ln_1: Vec<f32>,
     ln_2: Vec<f32>,
-    q_proj: Vec<f32>,
-    k_proj: Vec<f32>,
-    v_proj: Vec<f32>,
-    o_proj: Vec<f32>,
+    // A projection can be 32-bit floats, 8-bit codes or ternary codes. The
+    // `quantization` block of `config.json` decides, and the multiplication
+    // works the same way for all three.
+    q_proj: Matrix,
+    k_proj: Matrix,
+    v_proj: Matrix,
+    o_proj: Matrix,
     q_norm: Vec<f32>,
     k_norm: Vec<f32>,
-    w_gate: Vec<f32>,
-    w_up: Vec<f32>,
-    w_down: Vec<f32>,
+    w_gate: Matrix,
+    w_up: Matrix,
+    w_down: Matrix,
 }
 
 pub struct Model {
     pub config: Config,
-    wte: Vec<f32>,
+    wte: Matrix,
     ln_f: Vec<f32>,
     /// Present only when the checkpoint unties the output matrix; the published
     /// checkpoints all tie it to `wte`.
-    lm_head: Option<Vec<f32>>,
+    lm_head: Option<Matrix>,
     layers: Vec<Layer>,
     rope: RopeTable,
 }
@@ -56,10 +60,24 @@ impl Model {
         let q_dim = config.num_attention_heads * config.head_dim;
         let kv_dim = config.num_key_value_heads * config.head_dim;
 
-        let wte = weights.take("transformer.wte.weight", &[config.vocab_size, hidden])?;
+        let quantization = config.quantization.clone();
+        let quantization = quantization.as_ref();
+        let wte = weights.take_matrix(
+            "transformer.wte.weight",
+            &[config.vocab_size, hidden],
+            quantization,
+        )?;
         let ln_f = weights.take("transformer.ln_f.weight", &[hidden])?;
-        let lm_head = if weights.contains("lm_head.weight") {
-            Some(weights.take("lm_head.weight", &[config.vocab_size, hidden])?)
+        let has_lm_head = weights.contains("lm_head.weight")
+            || quantization
+                .map(|q| q.tensors.contains_key("lm_head.weight"))
+                .unwrap_or(false);
+        let lm_head = if has_lm_head {
+            Some(weights.take_matrix(
+                "lm_head.weight",
+                &[config.vocab_size, hidden],
+                quantization,
+            )?)
         } else {
             None
         };
@@ -70,15 +88,43 @@ impl Model {
             layers.push(Layer {
                 ln_1: weights.take(&format!("{p}ln_1.weight"), &[hidden])?,
                 ln_2: weights.take(&format!("{p}ln_2.weight"), &[hidden])?,
-                q_proj: weights.take(&format!("{p}attn.q_proj.weight"), &[q_dim, hidden])?,
-                k_proj: weights.take(&format!("{p}attn.k_proj.weight"), &[kv_dim, hidden])?,
-                v_proj: weights.take(&format!("{p}attn.v_proj.weight"), &[kv_dim, hidden])?,
-                o_proj: weights.take(&format!("{p}attn.o_proj.weight"), &[hidden, q_dim])?,
+                q_proj: weights.take_matrix(
+                    &format!("{p}attn.q_proj.weight"),
+                    &[q_dim, hidden],
+                    quantization,
+                )?,
+                k_proj: weights.take_matrix(
+                    &format!("{p}attn.k_proj.weight"),
+                    &[kv_dim, hidden],
+                    quantization,
+                )?,
+                v_proj: weights.take_matrix(
+                    &format!("{p}attn.v_proj.weight"),
+                    &[kv_dim, hidden],
+                    quantization,
+                )?,
+                o_proj: weights.take_matrix(
+                    &format!("{p}attn.o_proj.weight"),
+                    &[hidden, q_dim],
+                    quantization,
+                )?,
                 q_norm: weights.take(&format!("{p}attn.q_norm.weight"), &[config.head_dim])?,
                 k_norm: weights.take(&format!("{p}attn.k_norm.weight"), &[config.head_dim])?,
-                w_gate: weights.take(&format!("{p}mlp.w_gate.weight"), &[ffn, hidden])?,
-                w_up: weights.take(&format!("{p}mlp.w_up.weight"), &[ffn, hidden])?,
-                w_down: weights.take(&format!("{p}mlp.w_down.weight"), &[hidden, ffn])?,
+                w_gate: weights.take_matrix(
+                    &format!("{p}mlp.w_gate.weight"),
+                    &[ffn, hidden],
+                    quantization,
+                )?,
+                w_up: weights.take_matrix(
+                    &format!("{p}mlp.w_up.weight"),
+                    &[ffn, hidden],
+                    quantization,
+                )?,
+                w_down: weights.take_matrix(
+                    &format!("{p}mlp.w_down.weight"),
+                    &[hidden, ffn],
+                    quantization,
+                )?,
             });
         }
 
@@ -97,8 +143,41 @@ impl Model {
         })
     }
 
-    fn output_matrix(&self) -> &[f32] {
-        self.lm_head.as_deref().unwrap_or(&self.wte)
+    fn output_matrix(&self) -> &Matrix {
+        self.lm_head.as_ref().unwrap_or(&self.wte)
+    }
+
+    /// The form of each part of the model, for a report to a user.
+    pub fn storage(&self) -> Vec<(&'static str, &'static str)> {
+        let mut out = vec![("embedding", self.wte.kind())];
+        if let Some(head) = &self.lm_head {
+            out.push(("output", head.kind()));
+        }
+        if let Some(layer) = self.layers.first() {
+            out.push(("attention", layer.q_proj.kind()));
+            out.push(("mlp", layer.w_gate.kind()));
+        }
+        out
+    }
+
+    /// The number of bytes that the weights hold in memory.
+    pub fn weight_bytes(&self) -> usize {
+        let mut total = self.wte.bytes() + self.ln_f.len() * 4;
+        if let Some(head) = &self.lm_head {
+            total += head.bytes();
+        }
+        for layer in &self.layers {
+            total += layer.q_proj.bytes()
+                + layer.k_proj.bytes()
+                + layer.v_proj.bytes()
+                + layer.o_proj.bytes()
+                + layer.w_gate.bytes()
+                + layer.w_up.bytes()
+                + layer.w_down.bytes()
+                + (layer.ln_1.len() + layer.ln_2.len() + layer.q_norm.len() + layer.k_norm.len())
+                    * 4;
+        }
+        total
     }
 
     /// Runs one token at position `pos`, leaving the next-token logits in
@@ -124,27 +203,35 @@ impl Model {
         let scale = 1.0 / (head_dim as f32).sqrt();
         let embd_scale = cfg.embd_scale();
 
-        let row = &self.wte[token as usize * hidden..(token as usize + 1) * hidden];
-        for (dst, src) in state.x.iter_mut().zip(row) {
-            *dst = src * embd_scale;
+        match &self.wte {
+            Matrix::Dense { data, .. } => {
+                let row = &data[token as usize * hidden..(token as usize + 1) * hidden];
+                for (dst, src) in state.x.iter_mut().zip(row) {
+                    *dst = src * embd_scale;
+                }
+            }
+            other => {
+                // A quantized embedding needs one row rebuilt for this token.
+                let row = &mut state.embedding[..hidden];
+                other.row_into(token as usize, row);
+                for (dst, src) in state.x.iter_mut().zip(row.iter()) {
+                    *dst = src * embd_scale;
+                }
+            }
         }
 
         for (layer_idx, layer) in self.layers.iter().enumerate() {
             ops::rms_norm(&mut state.xb, &state.x, &layer.ln_1, cfg.rms_norm_eps);
 
-            ops::matvec(&mut state.q, &layer.q_proj, &state.xb);
+            layer.q_proj.matvec(&mut state.q, &state.xb);
             let k_slot = layer_idx * state.max_seq_len * kv_dim + pos * kv_dim;
             let v_slot = k_slot;
-            ops::matvec(
-                &mut state.k_cache[k_slot..k_slot + kv_dim],
-                &layer.k_proj,
-                &state.xb,
-            );
-            ops::matvec(
-                &mut state.v_cache[v_slot..v_slot + kv_dim],
-                &layer.v_proj,
-                &state.xb,
-            );
+            layer
+                .k_proj
+                .matvec(&mut state.k_cache[k_slot..k_slot + kv_dim], &state.xb);
+            layer
+                .v_proj
+                .matvec(&mut state.v_cache[v_slot..v_slot + kv_dim], &state.xb);
 
             // Per-head Q/K RMSNorm, then RoPE. Order matters: the reference
             // normalises before rotating.
@@ -181,25 +268,25 @@ impl Model {
                 }
             }
 
-            ops::matvec(&mut state.xb, &layer.o_proj, &state.attn_out);
+            layer.o_proj.matvec(&mut state.xb, &state.attn_out);
             for i in 0..hidden {
                 state.x[i] += state.xb[i];
             }
 
             ops::rms_norm(&mut state.xb, &state.x, &layer.ln_2, cfg.rms_norm_eps);
-            ops::matvec(&mut state.gate, &layer.w_gate, &state.xb);
-            ops::matvec(&mut state.up, &layer.w_up, &state.xb);
+            layer.w_gate.matvec(&mut state.gate, &state.xb);
+            layer.w_up.matvec(&mut state.up, &state.xb);
             for i in 0..cfg.intermediate_size {
                 state.gate[i] = ops::silu(state.gate[i]) * state.up[i];
             }
-            ops::matvec(&mut state.xb, &layer.w_down, &state.gate);
+            layer.w_down.matvec(&mut state.xb, &state.gate);
             for i in 0..hidden {
                 state.x[i] += state.xb[i];
             }
         }
 
         ops::rms_norm(&mut state.xb, &state.x, &self.ln_f, cfg.rms_norm_eps);
-        ops::matvec(&mut state.logits, self.output_matrix(), &state.xb);
+        self.output_matrix().matvec(&mut state.logits, &state.xb);
         state.position = pos + 1;
         Ok(())
     }
@@ -232,6 +319,8 @@ pub struct State {
     logits: Vec<f32>,
     k_cache: Vec<f32>,
     v_cache: Vec<f32>,
+    /// One row of a quantized embedding, rebuilt for each token.
+    embedding: Vec<f32>,
 }
 
 impl State {
@@ -256,6 +345,7 @@ impl State {
             logits: vec![0.0; cfg.vocab_size],
             k_cache: vec![0.0; cache_len],
             v_cache: vec![0.0; cache_len],
+            embedding: vec![0.0; cfg.hidden_size],
         }
     }
 

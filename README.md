@@ -145,6 +145,47 @@ The features of the engine make this possible:
 bananamendr = { version = "1", default-features = false, features = ["wasm"] }
 ```
 
+## Small checkpoints
+
+`bananamendy quantize` writes a copy of a checkpoint that needs 1 byte, or a
+quarter of a byte, for each weight. The engine reads that copy directly, and it
+keeps the codes in memory, so the memory in use is as small as the file.
+
+```bash
+bananamendy quantize /tmp/nano-int8 --name nano --method int8
+bananamendy chat --name /tmp/nano-int8 --prompt "Name one ocean."
+bananamendy compare /tmp/nano-int8 --name nano
+```
+
+Ready-made checkpoints are on Hugging Face under
+[fontlab](https://huggingface.co/fontlab):
+
+```bash
+bananamendy chat --name fontlab/BananaMind-2-Pro-Preview-Chat-int8 --prompt "Hi"
+```
+
+| Checkpoint | Method | Size | Same next token | Perplexity |
+|:-----------|:-------|:-----|:----------------|:-----------|
+| Nano | `int8` | 39.9 → 10.6 MB (3.8×) | 97.9% | 67.2 against 66.3 |
+| Nano | `mixed` | 39.9 → 10.4 MB (3.8×) | 93.7% | 68.7 against 66.3 |
+| Nano | `ternary` | 39.9 → 5.2 MB (7.7×) | 22.1% | 709.9 against 66.3 |
+| Pro | `int8` | 555.9 → 147.8 MB (3.8×) | 100.0% | 33.3 against 33.3 |
+| Pro | `mixed` | 555.9 → 144.9 MB (3.8×) | 90.5% | 33.3 against 33.3 |
+
+**Eight bits are nearly free. Ternary weights everywhere are not usable at these
+sizes.** The ternary grid holds three values, minus one, zero and plus one, with
+two scales for each group of 64 weights. The quantizer searches the threshold of
+each group for the smallest error, gives the two signs separate scales, and moves
+the error of each column into the columns that follow (GPTQ). Even so, a model of
+10 to 139 million weights cannot carry ternary weights everywhere: the published
+work either trains with the ternary grid from the start, or works above one
+billion parameters.
+
+`--method mixed` therefore measures each matrix on its own and gives ternary
+weights only where the answers barely move. See
+[Small checkpoints](https://code.twardoch.com/bananamend/quantization/) for the
+format, the method and the complete numbers.
+
 ## Development
 
 ```bash

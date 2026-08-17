@@ -40,6 +40,8 @@ pub enum Error {
     TokenOutOfRange { id: u32, vocab_size: usize },
     #[error("prompt is empty")]
     EmptyPrompt,
+    #[error("quantized checkpoint: {0}")]
+    Quantization(String),
 }
 
 impl Error {

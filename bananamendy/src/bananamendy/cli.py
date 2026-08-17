@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import json
 import sys
+from pathlib import Path
 from typing import Any
 
 from dataclasses import asdict
@@ -19,6 +21,7 @@ class Cli:
 
     def __init__(self, *, model: str | None = None, offline: bool = False) -> None:
         self._settings: Config = load_config().merged(model=model)
+        self._offline = offline
         self._engine = Engine(download=not offline)
 
     # ---- configuration -------------------------------------------------
@@ -173,6 +176,148 @@ class Cli:
             "decode_seconds": round(generation.decode_seconds, 4),
             "tokens_per_second": round(generation.tokens_per_second, 2),
         }
+
+    # ---- quantization --------------------------------------------------
+
+    def quantize(
+        self,
+        out: str,
+        name: str | None = None,
+        method: str = "mixed",
+        group_size: int = 64,
+        kl_budget: float = 0.02,
+        embedding: bool = True,
+        measure: bool = True,
+    ) -> dict[str, Any]:
+        """Writes a small copy of a checkpoint into the directory `out`.
+
+        `method` is `mixed`, `int8` or `ternary`:
+
+        * `mixed` gives ternary weights to the matrices that a measurement shows
+          can carry them, and 8-bit weights to the rest. This is the default,
+          and it is the only method that keeps the quality of a small model.
+        * `int8` gives 8-bit weights to every matrix. It loses almost nothing.
+        * `ternary` gives ternary weights to every matrix. Use it only to see
+          what the model does then; the answers of a small model become useless.
+
+        `kl_budget` controls `mixed`: it is the largest change of the answers
+        that the result may show on the measurement text.
+        """
+        from . import plan as planner
+        from .calibration import CALIBRATION_TEXTS
+        from .evaluate import compare as compare_checkpoints
+        from .quantize import quantize_checkpoint
+        from .reference import Reference, collect_inputs
+
+        source = Path(resolve(name or self._settings.model, download=not self._offline).path)
+        destination = Path(out).expanduser()
+        model = self._engine.load(str(source)).model
+        bos = int(model.config["bos_token_id"])
+        texts = [[bos] + list(model.tokenize(t)) for t in CALIBRATION_TEXTS]
+
+        print(f"source: {source}")
+        print(f"calibration: {len(texts)} texts, {sum(len(t) for t in texts)} tokens")
+        calibration = collect_inputs(source, texts, max_rows=2048)
+        names = Reference.load(source).matrix_names()
+
+        if method == "int8":
+            selection = {n: "int8" for n in names}
+        elif method == "ternary":
+            selection = {n: "ternary" for n in names}
+        elif method == "mixed":
+            tokens = planner.tokenize_evaluation(model, limit=96)
+            selection, report = planner.choose(
+                source,
+                kl_budget=kl_budget,
+                group_size=group_size,
+                calibration=calibration,
+                tokens=tokens,
+            )
+            print(
+                f"plan: {report['ternary']} ternary and {report['int8']} 8-bit matrices, "
+                f"divergence {report['kl_result']}"
+            )
+        else:
+            raise ValueError("method must be mixed, int8 or ternary")
+
+        if embedding:
+            # The embedding is a large part of a small checkpoint, and 8 bits
+            # cost it almost nothing.
+            selection["transformer.wte.weight"] = "int8"
+            if "lm_head.weight" in names:
+                selection["lm_head.weight"] = "int8"
+
+        result = quantize_checkpoint(
+            source,
+            destination,
+            group_size=group_size,
+            calibration=calibration,
+            plan=selection,
+        )
+        summary = result.summary()
+        summary["method"] = method
+        print(json.dumps(summary, indent=1))
+
+        if measure:
+            quality = compare_checkpoints(source, destination, max_tokens=96).as_dict()
+            (destination / "quality_report.json").write_text(
+                json.dumps(quality, indent=1) + "\n", encoding="utf-8"
+            )
+            print(json.dumps(quality, indent=1))
+            summary["quality"] = quality
+
+        # Record the method in the report as well, for the model card.
+        report_path = destination / "quantization_report.json"
+        report = json.loads(report_path.read_text("utf-8"))
+        report["summary"] = summary
+        report_path.write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
+        return summary
+
+    def compare(
+        self,
+        candidate: str,
+        name: str | None = None,
+        max_tokens: int = 96,
+    ) -> dict[str, Any]:
+        """Measures a checkpoint against the float checkpoint."""
+        from .evaluate import compare as compare_checkpoints
+
+        reference = resolve(name or self._settings.model, download=not self._offline).path
+        return compare_checkpoints(reference, candidate, max_tokens=max_tokens).as_dict()
+
+    def push(
+        self,
+        directory: str,
+        repo_id: str,
+        base_model: str | None = None,
+        private: bool = False,
+        card_only: bool = False,
+        research_only: bool = False,
+    ) -> str:
+        """Writes a model card and sends a quantized checkpoint to Hugging Face.
+
+        The card holds the measured numbers from `quantize`. Set `card_only` to
+        write the card and send nothing.
+        """
+        from . import __version__
+        from .models import repo_id_for
+        from .publish import build_card, read_reports, upload, write_card
+
+        path = Path(directory).expanduser()
+        quantization, quality = read_reports(path)
+        base = base_model or repo_id_for(self._settings.model)
+        card = build_card(
+            repo_id=repo_id,
+            base_model=base,
+            quantization=quantization,
+            quality=quality,
+            producer_version=__version__,
+            research_only=research_only,
+        )
+        write_card(path, card)
+        if card_only:
+            return str(path / "README.md")
+        return upload(path, repo_id, private=private)
 
     # ---- server --------------------------------------------------------
 

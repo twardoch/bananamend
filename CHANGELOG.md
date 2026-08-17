@@ -24,6 +24,23 @@ this_file: CHANGELOG.md
   chat answers, the top scores, and the streaming callback. `./build.sh` runs the
   same test, and it also builds the engine in the browser form.
 
+- Quantization. `bananamendy quantize` writes a checkpoint of 8-bit or ternary
+  weights, and the engine reads it directly. `bananamendy compare` measures a
+  checkpoint against the float checkpoint, and `bananamendy push` sends it to
+  Hugging Face with a model card that carries the numbers.
+  - The ternary grid is Ternary Weight Networks with a searched threshold and
+    separate scales for the two signs, and with the GPTQ error feedback over the
+    columns. The calibration uses a forward pass in numpy that agrees with the
+    engine to five decimal places.
+  - `--method mixed` measures each matrix on its own and gives ternary weights
+    only where the answers barely move.
+  - Measured: 8 bits give 98% to 100% next-token agreement at 3.8 times smaller.
+    Ternary weights everywhere give 22% on Nano at 7.7 times smaller, which is
+    not usable. The documentation states this plainly.
+- `Matrix` in the engine: a projection is now 32-bit floats, 8-bit codes or
+  ternary codes, and the multiplication of ternary codes needs no multiplication
+  for each weight.
+
 ### Fixed
 
 - `std::time::Instant` panics in WebAssembly. The engine now uses `web_time` for

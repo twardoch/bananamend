@@ -17,6 +17,7 @@
 
 pub mod config;
 pub mod error;
+pub mod matrix;
 pub mod model;
 pub mod ops;
 pub mod sample;
@@ -33,8 +34,9 @@ use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use web_time::Instant;
 
-pub use config::Config;
+pub use config::{Config, Quantization};
 pub use error::Error;
+pub use matrix::Matrix;
 pub use model::{Model, State};
 pub use sample::{Rng, SamplingConfig};
 pub use tokenizer::{Message, Tokenizer};

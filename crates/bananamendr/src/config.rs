@@ -31,10 +31,34 @@ pub struct Config {
     pub model_type: String,
     #[serde(default)]
     pub architectures: Vec<String>,
+    /// Present when `bananamendy quantize` wrote the checkpoint.
+    #[serde(default)]
+    pub quantization: Option<Quantization>,
 }
 
 fn default_true() -> bool {
     true
+}
+
+/// How one tensor is stored, from the `quantization` block of `config.json`.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct TensorQuantization {
+    pub method: String,
+    #[serde(default)]
+    pub group_size: usize,
+    #[serde(default)]
+    pub shape: Vec<usize>,
+}
+
+/// The `quantization` block. A checkpoint of plain floats has none.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+pub struct Quantization {
+    #[serde(default)]
+    pub method: String,
+    #[serde(default)]
+    pub group_size: usize,
+    #[serde(default)]
+    pub tensors: std::collections::HashMap<String, TensorQuantization>,
 }
 
 impl Config {

@@ -119,6 +119,44 @@ is what it finds.
 One generation at a time is a property of the interpreter lock, and not an
 oversight. Do not add a pool of workers and expect more speed.
 
+## Quantization
+
+A quantized checkpoint keeps its codes in memory and rebuilds each value inside
+the multiplication. `crates/bananamendr/src/matrix.rs` holds that: `Matrix` is
+`Dense`, `Int8` or `Ternary`, and `model.rs` stores a `Matrix` for every
+projection and for the embedding. The form comes from the `quantization` block of
+`config.json`, which `config.rs` parses and `weights.rs` acts on. A tensor that
+the block does not name must be present as 32-bit floats.
+
+Ternary codes are two bits, four in a byte, from the lowest bits upwards: 0 is
+minus one, 1 is zero, 2 is plus one. Each group of columns carries two scales, one
+for each sign. The ternary multiplication adds the inputs of the positive codes,
+subtracts the inputs of the negative codes, and multiplies twice for each group;
+it never multiplies for a single weight.
+
+The Python side is four files:
+
+- `quantize.py` — the grids. `quantize_matrix` is Ternary Weight Networks with a
+  searched threshold and two scales; `quantize_matrix_calibrated` adds the GPTQ
+  error feedback; `quantize_matrix_int8` is symmetric 8-bit. `quantize_checkpoint`
+  writes the checkpoint and the report, and a `plan` decides the grid of each
+  tensor.
+- `reference.py` — a forward pass in numpy, **for calibration only**. It agrees
+  with the engine to five decimal places, and `test_rust_agreement` in the wasm
+  parity work keeps it honest. It exists because the engine does not report the
+  input of each matrix.
+- `plan.py` — the mixture. It measures each matrix on its own, sorts by the
+  change of the answers, and accepts ternary forms while the total change stays
+  inside a budget. It measures after each acceptance, because two ternary
+  matrices are worse than the sum of the two alone.
+- `evaluate.py` and `calibration.py` — the measurement, and the two texts. The
+  calibration text and the measurement text must stay different.
+
+**The finding, so that nobody repeats the work:** ternary weights everywhere give
+22% next-token agreement on Nano and a perplexity ten times higher. Eight bits
+give 98% to 100% and a perplexity within 1%. Do not present a fully ternary
+checkpoint of these models as usable.
+
 ## The WebAssembly module and the site
 
 `docs/` is a Jekyll site for GitHub Pages. It loads the Just the Docs theme with
