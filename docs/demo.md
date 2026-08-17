@@ -57,12 +57,12 @@ program on your computer, and a test in the repository proves it.
     <legend class="fieldset-legend">Ask the model</legend>
 
     <div class="demo-row">
-      <label class="label" for="mode">Mode</label>
+      <label class="demo-label" for="mode">Mode</label>
       <select id="mode" class="select select-bordered select-sm">
         <option value="chat">chat — the chat format is applied</option>
         <option value="generate">generate — the text continues</option>
       </select>
-      <label class="label" for="example">Example</label>
+      <label class="demo-label" for="example">Example</label>
       <select id="example" class="select select-bordered select-sm">
         <option value="0">Name one ocean.</option>
         <option value="1">Why is the sky blue?</option>
@@ -71,17 +71,17 @@ program on your computer, and a test in the repository proves it.
       </select>
     </div>
 
-    <label class="label" for="prompt">Your text</label>
+    <label class="demo-label" for="prompt">Your text</label>
     <textarea id="prompt" class="textarea textarea-bordered w-full" rows="3" spellcheck="false"></textarea>
 
     <div class="demo-row">
-      <label class="label" for="maxTokens">Maximum new tokens</label>
+      <label class="demo-label" for="maxTokens">Maximum new tokens</label>
       <input id="maxTokens" type="number" class="input input-bordered input-sm demo-number" min="1" max="512" value="48">
-      <label class="label" for="temperature">Temperature</label>
+      <label class="demo-label" for="temperature">Temperature</label>
       <input id="temperature" type="number" class="input input-bordered input-sm demo-number" min="0" max="2" step="0.1" value="0">
-      <label class="label" for="topK">Top-k</label>
+      <label class="demo-label" for="topK">Top-k</label>
       <input id="topK" type="number" class="input input-bordered input-sm demo-number" min="0" max="200" value="0">
-      <label class="label" for="seed">Seed</label>
+      <label class="demo-label" for="seed">Seed</label>
       <input id="seed" type="number" class="input input-bordered input-sm demo-number" min="0" max="99999" value="0">
     </div>
 

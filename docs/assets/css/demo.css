@@ -23,11 +23,14 @@
   align-items: center;
 }
 
-.bananamend-demo .label,
-.milkwash-demo .label {
+/* Just the Docs also has a `label` class, and it draws a coloured pill. The
+ * demonstration therefore uses its own name for a form label. */
+.bananamend-demo .demo-label,
+.milkwash-demo .demo-label {
   font-size: 0.78rem;
   font-weight: 600;
   padding: 0;
+  display: inline-block;
 }
 
 .bananamend-demo .demo-number,
