@@ -60,18 +60,21 @@ text that the quantizer never sees. Both sides run in the engine.
 
 | Checkpoint | Method | File | Weights in memory | Speed | Same next token | Perplexity | Identical greedy answers |
 |:-----------|:-------|:-----|:------------------|:------|:----------------|:-----------|:-------------------------|
-| Nano (10 M) | floats | 39.9 MB | 39.9 MB | 611 tokens/s | — | 66.3 | — |
-| Nano | 8 bits | 10.6 MB (3.8×) | 10.6 MB | 302 tokens/s | 97.9% | 67.2 | 4 of 8 |
-| Nano | mixed (3 ternary) | 10.5 MB (3.8×) | 10.5 MB | 261 tokens/s | 96.8% | 67.5 | 3 of 8 |
-| Nano | ternary (70) | 5.2 MB (7.7×) | 5.2 MB | 34 tokens/s | 22.1% | 709.9 | 0 of 8 |
-| Pro (139 M) | floats | 555.9 MB | 555.9 MB | 71 tokens/s | — | 33.3 | — |
-| Pro | 8 bits | 147.8 MB (3.8×) | 147.8 MB | 54 tokens/s | 100.0% | 33.3 | 6 of 8 |
-| Pro | mixed (12 ternary) | 144.9 MB (3.8×) | 144.9 MB | 46 tokens/s | 90.5% | 33.3 | 3 of 8 |
-| Pro | ternary (168) | 66.7 MB (8.3×) | 66.7 MB | 11 tokens/s | 41.3% | 131.1 | 0 of 8 |
+| Nano (10 M) | floats | 39.9 MB | 39.9 MB | 611 tokens/s | this is the reference | 66.3 | this is the reference |
+| Nano | 8 bits | 10.6 MB (3.8×) | 10.6 MB | 302 tokens/s | 97.9% | 67.2 against 66.3 (1.01×) | 4 of 8 |
+| Nano | mixed (3 ternary) | 10.5 MB (3.8×) | 10.5 MB | 261 tokens/s | 96.8% | 67.5 against 66.3 (1.02×) | 3 of 8 |
+| Nano | ternary (70) | 5.2 MB (7.7×) | 5.2 MB | 34 tokens/s | 22.1% | 709.9 against 66.3 (10.7×) | 0 of 8 |
+| Pro (139 M) | floats | 555.9 MB | 555.9 MB | 71 tokens/s | this is the reference | 33.3 | this is the reference |
+| Pro | 8 bits | 147.8 MB (3.8×) | 147.8 MB | 54 tokens/s | 100.0% | 33.3 against 33.3 (1.00×) | 6 of 8 |
+| Pro | mixed (12 ternary) | 144.9 MB (3.8×) | 144.9 MB | 46 tokens/s | 90.5% | 33.3 against 33.3 (1.00×) | 3 of 8 |
+| Pro | ternary (168) | 66.7 MB (8.3×) | 66.7 MB | 11 tokens/s | 41.3% | 131.1 against 38.3 (3.4×) | 0 of 8 |
 
-Speed is one thread group on an Apple M4 Max, greedy, 32 new tokens. The two
-ternary rows for Pro use 64 tokens of the measurement text, and the other rows
-use 96, so compare a perplexity only inside one model.
+Each perplexity is against the reference of the same measurement, and the number
+in brackets is the ratio. The Pro ternary row uses 64 tokens of the measurement
+text, and every other row uses 96; a longer text gives a different reference,
+which is why each row carries its own.
+
+Speed is one Apple M4 Max, greedy, 32 new tokens, with all of the cores.
 
 `bananamendy info --name <checkpoint>` reports the form and the memory, so those
 two columns are checkable:
