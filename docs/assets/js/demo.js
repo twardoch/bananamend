@@ -298,7 +298,12 @@ function run() {
         ui.speed.textContent = `${result.tokens_per_second.toFixed(1)} tokens/s`;
         ui.eos.textContent = result.finished_by_eos ? "yes" : "no, the limit stopped it";
         ui.stats.hidden = false;
-        say(`${result.tokens.length} tokens, and the callback saw ${pieces.length}.`, "ok");
+        // The engine stops at the end token and does not send it to the
+        // callback, so the callback sees one piece less than the token count.
+        const note = result.finished_by_eos
+          ? " The last token is the end marker, and the engine does not show it."
+          : "";
+        say(`${result.tokens.length} tokens in ${result.decode_seconds.toFixed(1)} s.${note}`, "ok");
       } catch (error) {
         say(`The generation failed: ${error}`, "error");
       } finally {

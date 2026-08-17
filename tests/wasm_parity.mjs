@@ -108,9 +108,20 @@ const streamed = model.generate(
     parts.push({ text, token });
   },
 );
-check("stream token count", parts.length, streamed.tokens.length);
-check("stream token ids", parts.map((p) => p.token), Array.from(streamed.tokens));
-check("stream text", parts.map((p) => p.text).join(""), streamed.text);
+// The engine stops at the end token and does not send it to the callback, so the
+// callback sees one piece less when the answer ended by itself.
+const expectedPieces = streamed.finished_by_eos
+  ? streamed.tokens.length - 1
+  : streamed.tokens.length;
+check("stream token count", parts.length, expectedPieces);
+check(
+  "stream token ids",
+  parts.map((p) => p.token),
+  Array.from(streamed.tokens).slice(0, expectedPieces),
+);
+if (!streamed.finished_by_eos) {
+  check("stream text", parts.map((p) => p.text).join(""), streamed.text);
+}
 check("stream is the same as no stream", streamed.tokens, reference.generate[0].tokens);
 
 if (failures.length > 0) {

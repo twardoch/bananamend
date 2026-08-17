@@ -130,6 +130,10 @@ for delta in engine.stream("nano", prompt="The capital of France is", max_new_to
 The engine keeps each loaded model, and it lets one generation run at a time. See
 [The server](../server/) for the reason.
 
+The callback of a stream does not receive the end token: the engine stops at it,
+and a reader must not see the marker. The count of the pieces is therefore one
+less than the count of the tokens when the answer ended by itself.
+
 The lower level is `bananamendr`, which takes a path:
 
 ```python
