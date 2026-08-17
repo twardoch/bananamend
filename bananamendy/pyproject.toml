@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bananamendy"
-version = "1.0.1"
+version = "1.0.2"
 description = "CLI and OpenAI-compatible server for local CPU inference on BananaMind-2 checkpoints"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -25,7 +25,7 @@ classifiers = [
 ]
 keywords = ["llm", "inference", "openai", "server", "cli", "huggingface"]
 dependencies = [
-  "bananamendr==1.0.1",
+  "bananamendr==1.0.2",
   "fire>=0.6",
   "huggingface-hub>=0.26",
   "platformdirs>=4.2",

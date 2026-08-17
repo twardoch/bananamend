@@ -5,7 +5,7 @@ from .config import Config, config_path, load_config, write_default_config
 from .engine import Engine, LoadedModel
 from .models import REGISTRY, Checkpoint, ModelError, list_local, pull, resolve
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 __all__ = [
     "REGISTRY",
