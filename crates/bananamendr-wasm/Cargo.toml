@@ -1,0 +1,32 @@
+# this_file: crates/bananamendr-wasm/Cargo.toml
+[package]
+name = "bananamendr-wasm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "WebAssembly bindings for bananamendr"
+# The output of this crate is a WebAssembly module. A copy on crates.io would
+# give no value, so the crate is not published.
+publish = false
+
+[lib]
+name = "bananamendr_wasm"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# No files and no threads in a browser, so both features go away. The tokenizer
+# then needs `unstable_wasm`, which replaces the C library for regular
+# expressions with a Rust one.
+bananamendr = { path = "../bananamendr", version = "=1.0.0", default-features = false, features = ["wasm"] }
+serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+
+[target.wasm32-unknown-unknown.dependencies]
+# `tokenizers` and `ahash` need a source of random numbers. The flag in
+# `.cargo/config.toml` selects the browser source.
+getrandom = { version = "0.3", features = ["wasm_js"] }

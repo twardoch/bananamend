@@ -4,6 +4,7 @@
 //! and behaves identically on macOS (aarch64/x86_64) and Windows; autovectorisation
 //! by LLVM is relied on instead of intrinsics.
 
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// Projections below this many multiply-accumulates are computed on the calling
@@ -15,6 +16,7 @@ const PARALLEL_MAC_THRESHOLD: usize = 1 << 18;
 
 /// Minimum multiply-accumulates per Rayon task. One row of a 640-wide
 /// projection is far too little work to pay for a task, so rows are batched.
+#[cfg(feature = "parallel")]
 const MACS_PER_TASK: usize = 1 << 15;
 
 /// `out[i] = dot(w[i, ..], x)` for a row-major `w` of shape `[out_dim, in_dim]`.
@@ -22,21 +24,25 @@ pub fn matvec(out: &mut [f32], w: &[f32], x: &[f32]) {
     let in_dim = x.len();
     debug_assert_eq!(w.len(), out.len() * in_dim);
 
-    if out.len() * in_dim < PARALLEL_MAC_THRESHOLD {
+    // WebAssembly has one thread here, so the serial path is the only path.
+    if !cfg!(feature = "parallel") || out.len() * in_dim < PARALLEL_MAC_THRESHOLD {
         for (i, o) in out.iter_mut().enumerate() {
             *o = dot(&w[i * in_dim..(i + 1) * in_dim], x);
         }
     } else {
-        let rows_per_task = (MACS_PER_TASK / in_dim).max(1);
-        out.par_chunks_mut(rows_per_task)
-            .enumerate()
-            .for_each(|(chunk, rows)| {
-                let first = chunk * rows_per_task;
-                for (offset, o) in rows.iter_mut().enumerate() {
-                    let i = first + offset;
-                    *o = dot(&w[i * in_dim..(i + 1) * in_dim], x);
-                }
-            });
+        #[cfg(feature = "parallel")]
+        {
+            let rows_per_task = (MACS_PER_TASK / in_dim).max(1);
+            out.par_chunks_mut(rows_per_task)
+                .enumerate()
+                .for_each(|(chunk, rows)| {
+                    let first = chunk * rows_per_task;
+                    for (offset, o) in rows.iter_mut().enumerate() {
+                        let i = first + offset;
+                        *o = dot(&w[i * in_dim..(i + 1) * in_dim], x);
+                    }
+                });
+        }
     }
 }
 

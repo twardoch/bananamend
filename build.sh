@@ -27,7 +27,7 @@ finish() {
     local message
     trap - EXIT
     if (( status == 0 && BUILD_COMPLETED == 1 )); then
-        message='BUILD SUCCESS: bananamendr crate, extension module and bananamendy passed.'
+        message='BUILD SUCCESS: the crate, the extension module, bananamendy and the WebAssembly build passed.'
     else
         (( status == 0 )) && status=1
         message="BUILD FAILURE: exit status $status; inspect $LOG"
@@ -59,8 +59,12 @@ verify_layout() {
         crates/bananamendr/src/main.rs \
         crates/bananamendr-py/Cargo.toml \
         crates/bananamendr-py/pyproject.toml \
+        crates/bananamendr-wasm/Cargo.toml \
+        crates/bananamendr-wasm/src/lib.rs \
         bananamendy/pyproject.toml \
         bananamendy/tests \
+        tests/wasm_parity.mjs \
+        wasm.sh \
         scripts/release-manifests.py \
         scripts/check-python-artifacts.py; do
         [[ -e "$ROOT/$required" ]] || {
@@ -130,6 +134,23 @@ PY
     "$venv/bin/bananamendy" registry >/dev/null
 }
 
+# Builds the WebAssembly module, compares it with the Python module, and checks
+# that docs/ holds the module for this version. `./wasm.sh --refresh` writes it.
+wasm_gate() {
+    if [[ "${BANANAMEND_SKIP_WASM:-0}" == "1" ]]; then
+        printf 'WASM gate skipped, because BANANAMEND_SKIP_WASM=1.\n'
+        return 0
+    fi
+    for tool in wasm-pack node rustup; do
+        command -v "$tool" >/dev/null 2>&1 || {
+            printf 'The WASM gate needs %s. Install it, or set BANANAMEND_SKIP_WASM=1.\n' \
+                "$tool" >&2
+            return 1
+        }
+    done
+    "$ROOT/wasm.sh"
+}
+
 run_build() {
     local tool
     for tool in git cargo rustc uv uvx python3; do
@@ -154,7 +175,12 @@ run_build() {
     cargo build --manifest-path "$ROOT/Cargo.toml" -p bananamendr --examples
     cargo test --manifest-path "$ROOT/Cargo.toml" --workspace
     cargo test --manifest-path "$ROOT/Cargo.toml" -p bananamendr --doc
+    # The engine must also build in the form that a browser uses: no files, one
+    # thread, and the Rust library for regular expressions.
+    cargo build --manifest-path "$ROOT/Cargo.toml" -p bananamendr \
+        --no-default-features --features wasm
     python_gate "$version"
+    wasm_gate
 
     record_tree "$TEMP_DIR/after"
     verify_tree_unchanged "$TEMP_DIR/before" "$TEMP_DIR/after"

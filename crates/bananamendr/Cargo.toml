@@ -21,15 +21,39 @@ path = "src/lib.rs"
 [[bin]]
 name = "bananamendr"
 path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+# The default build is for a computer: it reads files, and it uses all of the
+# cores. A WebAssembly build has neither, so it gives `default-features = false`.
+default = ["std-fs", "parallel", "cli", "onig"]
+# File loading: `Pipeline::from_dir` and friends. Without it, use
+# `Pipeline::from_parts`, which takes bytes.
+std-fs = ["dep:memmap2"]
+# Multiple threads for the projections, through rayon.
+parallel = ["dep:rayon"]
+# The `bananamendr` binary.
+cli = ["std-fs", "dep:anyhow", "dep:clap"]
+# The tokenizer needs one library for regular expressions. `onig` is the C
+# library that the Hugging Face crate prefers. A browser cannot use it, so a
+# WebAssembly build gives `wasm` instead. Give exactly one of the two.
+onig = ["tokenizers/onig"]
+wasm = ["tokenizers/unstable_wasm"]
 
 [dependencies]
-memmap2.workspace = true
-rayon.workspace = true
 safetensors.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokenizers.workspace = true
-# CLI only; kept in the same crate so `cargo install bananamendr` ships the binary.
-anyhow.workspace = true
-clap.workspace = true
+# `default-features = false` removes the C library for regular expressions and
+# the progress bar. Both stop a WebAssembly build.
+tokenizers = { workspace = true }
+memmap2 = { workspace = true, optional = true }
+rayon = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
+
+# A browser has no clock for `std::time::Instant`, and a call to it panics. This
+# crate gives the same interface and reads the clock of the page.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-time = "1"

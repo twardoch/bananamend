@@ -43,6 +43,7 @@ pub enum Error {
 }
 
 impl Error {
+    #[cfg(feature = "std-fs")]
     pub(crate) fn io(path: impl Into<PathBuf>, source: std::io::Error) -> Self {
         Error::Io {
             path: path.into(),

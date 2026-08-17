@@ -1,0 +1,39 @@
+# this_file: docs/_config.yml
+title: bananamend
+description: >-
+  Local inference for the BananaMind-2 chat models. Rust core, Python command
+  line, OpenAI-compatible server, and a build that runs in a browser.
+url: https://code.twardoch.com
+baseurl: /bananamend
+
+# The theme is loaded from GitHub when the site is built. The repository holds no
+# copy of the theme.
+remote_theme: just-the-docs/just-the-docs
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+
+color_scheme: dark
+search_enabled: true
+heading_anchors: true
+
+aux_links:
+  GitHub: https://github.com/twardoch/bananamend
+  PyPI (bananamendy): https://pypi.org/project/bananamendy/
+  crates.io (bananamendr): https://crates.io/crates/bananamendr
+aux_links_new_tab: true
+
+footer_content: >-
+  bananamend is free software under the Apache-2.0 licence.
+
+# The WebAssembly module and its loader are static files. Jekyll must copy them
+# without a change.
+include:
+  - assets/wasm
+keep_files:
+  - assets/wasm
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor

@@ -39,6 +39,11 @@ SITES: tuple[tuple[str, str, str], ...] = (
         'version = "{version}"',
     ),
     (
+        "crates/bananamendr-wasm/Cargo.toml",
+        r'(?m)^bananamendr = \{ path = "../bananamendr", version = "=([^"]+)", default-features = false, features = \["wasm"\] \}$',
+        'bananamendr = {{ path = "../bananamendr", version = "={version}", default-features = false, features = ["wasm"] }}',
+    ),
+    (
         "bananamendy/pyproject.toml",
         r'(?m)^  "bananamendr==([^"]+)",$',
         '  "bananamendr=={version}",',

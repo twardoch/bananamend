@@ -7,6 +7,7 @@
 //! Weights are immutable and shared (`Model`); everything mutable lives in
 //! `State`, so one loaded model can serve several independent sequences.
 
+#[cfg(feature = "std-fs")]
 use std::path::Path;
 
 use crate::config::Config;
@@ -40,7 +41,8 @@ pub struct Model {
 }
 
 impl Model {
-    /// Loads `config.json` and `model.safetensors` from a checkpoint directory.
+    /// Reads `config.json` and `model.safetensors` from a checkpoint directory.
+    #[cfg(feature = "std-fs")]
     pub fn from_dir(dir: &Path) -> Result<Self, Error> {
         let config_path = dir.join("config.json");
         let text = std::fs::read_to_string(&config_path).map_err(|e| Error::io(&config_path, e))?;

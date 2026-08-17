@@ -23,8 +23,15 @@ pub mod sample;
 pub mod tokenizer;
 pub mod weights;
 
+#[cfg(feature = "std-fs")]
 use std::path::Path;
+// `std::time::Instant` panics in a browser, because WebAssembly has no clock of
+// its own. `web_time::Instant` reads the clock of the page and has the same
+// interface, so the code below does not change.
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 pub use config::Config;
 pub use error::Error;
@@ -105,10 +112,32 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
+    /// Reads a complete checkpoint directory.
+    #[cfg(feature = "std-fs")]
     pub fn from_dir(dir: &Path) -> Result<Self, Error> {
         Ok(Self {
             model: Model::from_dir(dir)?,
             tokenizer: Tokenizer::from_dir(dir)?,
+        })
+    }
+
+    /// Builds a pipeline from parts that you already have in memory.
+    ///
+    /// A browser uses this function, because a browser has no files. Give the
+    /// text of `config.json`, the text of `tokenizer.json`, the text of
+    /// `tokenizer_config.json` (or `None`), and the bytes of
+    /// `model.safetensors`.
+    pub fn from_parts(
+        config_json: &str,
+        tokenizer_json: &str,
+        tokenizer_config_json: Option<&str>,
+        weights: &[u8],
+    ) -> Result<Self, Error> {
+        let config = Config::from_json(config_json)?;
+        let model = Model::from_parts(config, Weights::from_bytes(weights)?)?;
+        Ok(Self {
+            model,
+            tokenizer: Tokenizer::from_json(tokenizer_json, tokenizer_config_json)?,
         })
     }
 

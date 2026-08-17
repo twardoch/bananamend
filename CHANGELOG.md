@@ -6,6 +6,31 @@ this_file: CHANGELOG.md
 
 ## Unreleased
 
+### Added
+
+- A WebAssembly build. `bananamendr-wasm` runs the engine in a browser. The crate
+  is not published, because a WebAssembly module has no use as a Rust dependency.
+- `Pipeline::from_parts`, `Weights::from_bytes` and `Tokenizer::from_json`. These
+  take a checkpoint that is already in memory, which is what a browser needs.
+- Features in the engine: `std-fs` for the file loaders, `parallel` for rayon,
+  `cli` for the program, and `onig` or `wasm` for the tokenizer. The defaults are
+  unchanged for a computer; a browser build gives
+  `--no-default-features --features wasm`.
+- A documentation site in `docs/`, for GitHub Pages with the Just the Docs theme.
+  The demonstration page downloads the Nano model from Hugging Face and then runs
+  the engine in the browser. It uses daisyUI from a CDN for its components.
+- `./wasm.sh` builds the module and compares it with the Python module: the model
+  facts, the token ids for five texts, the chat format, three greedy answers, two
+  chat answers, the top scores, and the streaming callback. `./build.sh` runs the
+  same test, and it also builds the engine in the browser form.
+
+### Fixed
+
+- `std::time::Instant` panics in WebAssembly. The engine now uses `web_time` for
+  that target.
+
+## 1.0.0 — 2026-08-17
+
 First public release, extracted from the private `bananamind` prototype.
 
 ### Added

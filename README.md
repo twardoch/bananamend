@@ -4,59 +4,67 @@ this_file: README.md
 
 # bananamend
 
-Local CPU inference for the **BananaMind-2** chat checkpoints — Nano, Mini and
-Pro (Preview) — written in Rust, callable from Python, with no PyTorch at
-runtime. It reads the published `model.safetensors` and `tokenizer.json`
-directly: no conversion step, no second weight format.
+**Local inference for the BananaMind-2 chat models. Rust engine, Python command
+line, a server with the OpenAI interface, and a build that runs in a browser.**
 
-Greedy decoding is **token-exact against Hugging Face `transformers`** for all
-three checkpoints; that equivalence is a test, not a claim
-(`tests/test_parity.py`).
+The models are small: Nano is 40 MB, Mini is 230 MB, and Pro (Preview) is 1.1 GB.
+The engine reads the published `model.safetensors` and `tokenizer.json` directly,
+so there is no conversion step and no second copy of the weights. PyTorch is not
+necessary at any time.
 
-| Package | Language | Registries | Role |
-| --- | --- | --- | --- |
-| `bananamendr` | Rust | [crates.io](https://crates.io/crates/bananamendr) · [PyPI](https://pypi.org/project/bananamendr/) | the runtime, the `bananamendr` CLI, and the Python extension module |
-| `bananamendy` | Python | [PyPI](https://pypi.org/project/bananamendy/) | checkpoint fetching, config, Fire CLI, OpenAI-compatible server |
+Greedy decoding gives the same tokens as Hugging Face `transformers` for all three
+models. That agreement is a test in this repository (`tests/test_parity.py`), and
+not only a statement.
 
-The split is deliberate: **`bananamendr` takes explicit paths and never touches
-the network**; everything convenient — downloads, caching, config files, a
-server — lives in `bananamendy`.
+Documentation and a browser demonstration: <https://code.twardoch.com/bananamend/>
+
+## Three products
+
+| Product | Language | Registry | Function |
+|:--------|:---------|:---------|:---------|
+| [`bananamendr`](https://crates.io/crates/bananamendr) | Rust | crates.io and PyPI | the engine, the `bananamendr` program, and the Python module |
+| [`bananamendy`](https://pypi.org/project/bananamendy/) | Python | PyPI | downloads, configuration, a Fire command line, and the server |
+| the browser build | WebAssembly | none | the demonstration page in `docs/` |
+
+The division of work is deliberate: **`bananamendr` takes a path and nothing else.
+It makes no network request.** All of the convenient parts — downloads, a cache, a
+configuration file, a server — are in `bananamendy`.
 
 ## Install
 
 ```bash
-uv pip install bananamendy          # CLI + server + the extension module
-cargo install bananamendr           # just the Rust CLI
+uv pip install bananamendy          # the command line, the server, and the engine
+cargo install bananamendr           # only the Rust program
 ```
 
-From this checkout:
+From this repository:
 
 ```bash
-./install.sh                        # CLI into ~/.local/bin, wheels into system Python
+./install.sh                        # the program into ~/.local/bin, the wheels into system Python
 ```
 
-## Python
+## Use
 
 ```bash
-bananamendy pull nano                      # into the Hugging Face cache
-bananamendy models                         # what is cached locally
-bananamendy info                           # architecture facts
+bananamendy pull nano                      # about 40 MB into the Hugging Face cache
+bananamendy models                         # what is in the cache
+bananamendy info                           # the architecture facts
 bananamendy chat --prompt "Why is the sky blue?"
-bananamendy chat                           # REPL
+bananamendy chat                           # a conversation; an empty line ends it
 bananamendy generate --prompt "Once upon a time"
 bananamendy logits --text "The capital of France is"
 bananamendy bench
-bananamendy serve                          # OpenAI-compatible on 127.0.0.1:8377
+bananamendy serve                          # OpenAI interface on 127.0.0.1:8377
 ```
 
-Aliases `nano`, `mini`, `pro` expand to the `BananaMind/BananaMind-2-*-Chat`
-repos; any repo id or local directory works too. Weights live in the ordinary
-Hugging Face cache (`HF_HOME` / `HF_HUB_CACHE` are respected), so a checkpoint
-you already have is not downloaded twice.
+The aliases `nano`, `mini` and `pro` become the `BananaMind/BananaMind-2-*-Chat`
+repositories. Any repository name works, and so does a path to a directory. The
+weights go into the usual Hugging Face cache, so `HF_HOME` and `HF_HUB_CACHE`
+control the location, and a model that you already have is not downloaded again.
 
-Configuration is TOML in the platformdirs location — `bananamendy init_config`
-writes it, `bananamendy config` shows the effective values, and `BANANAMENDY_*`
-environment variables override it.
+Configuration is a TOML file in the `platformdirs` location.
+`bananamendy init_config` writes it, `bananamendy config` shows the values in use,
+and each value has a `BANANAMENDY_*` environment variable.
 
 ### The server
 
@@ -66,16 +74,21 @@ curl http://127.0.0.1:8377/v1/chat/completions \
   -d '{"model": "nano", "messages": [{"role": "user", "content": "Hi"}], "stream": true}'
 ```
 
-`GET /v1/models`, `POST /v1/chat/completions`, `POST /v1/completions` (both with
-SSE streaming) and `GET /health`. Sampling parameters absent from a request fall
-back to your config rather than to OpenAI's defaults, so the server and the CLI
-behave the same.
+The server answers `GET /v1/models`, `POST /v1/chat/completions`,
+`POST /v1/completions` and `GET /health`. Both `POST` paths accept
+`"stream": true`, and the answer is then a sequence of server-sent events.
 
-Requests are served **one at a time**: a CPU decode holds the GIL, so a worker
-pool would not decode in parallel. Streaming still works while a generation is in
-flight because deltas are handed to the response through a queue.
+A parameter that a request does not give comes from your configuration, and not
+from the defaults of OpenAI. The server and the command line then behave in the
+same way.
 
-### Library
+The server answers **one request at a time**. A generation holds the Python
+interpreter lock for the complete decode, so two generations in one process cannot
+run together. A pool of workers would give no more speed and would use more
+memory. Streaming still works, because the generation runs on a worker thread and
+its callback puts each piece of text into a queue.
+
+### Python
 
 ```python
 import bananamendr
@@ -87,14 +100,14 @@ print(generation.text, generation.tokens_per_second)
 model.generate("Once upon a time", on_token=lambda text, token: print(text, end=""))
 ```
 
-The Python API defaults to greedy decoding; the CLIs sample
-(`--temperature 0.8 --top-k 40 --top-p 0.95 --repetition-penalty 1.1`), because
-interactive output should not loop.
+The Python interface is greedy by default. The two command line programs sample by
+default (`--temperature 0.8 --top-k 40 --top-p 0.95 --repetition-penalty 1.1`),
+because an interactive answer must not repeat itself.
 
-## Rust
+### Rust
 
 ```sh
-scripts/fetch_models.sh nano        # into ref/ (needs git-lfs), or use bananamendy pull
+scripts/fetch_models.sh nano        # into ref/, or use bananamendy pull
 cargo run --release -p bananamendr -- info -m ref/BananaMind-2-Nano-Chat
 ```
 
@@ -108,32 +121,65 @@ let generation = pipeline.chat(
 )?;
 ```
 
-## Layout
+`Pipeline::from_parts` takes the four parts of a checkpoint in memory. The browser
+build uses that function, because a browser has no files.
 
-```
-crates/bananamendr/      runtime library + `bananamendr` CLI binary
-crates/bananamendr-py/   PyO3 extension module, published to PyPI as `bananamendr`
-bananamendy/             Python package: models, config, engine, server, CLI
-tests/test_parity.py     token-exactness against transformers (skips if absent)
-ref/                     checkpoints, git-ignored
-scripts/                 release version graph, artifact inspection, model fetch
+### The browser
+
+The [demonstration page](https://code.twardoch.com/bananamend/demo/) downloads the
+Nano model from Hugging Face and then runs the engine in your browser. Nothing goes
+to a server of that site.
+
+The features of the engine make this possible:
+
+| Feature | Default | Function |
+|:--------|:--------|:---------|
+| `std-fs` | yes | Read a checkpoint from a directory. |
+| `parallel` | yes | Use all of the cores, through rayon. |
+| `cli` | yes | The `bananamendr` program. |
+| `onig` | yes | The C library for regular expressions in the tokenizer. |
+| `wasm` | no | The Rust library for regular expressions, for a browser. |
+
+```toml
+[dependencies]
+bananamendr = { version = "1", default-features = false, features = ["wasm"] }
 ```
 
 ## Development
 
 ```bash
-./build.sh      # fmt, clippy, cargo test + doctests, both wheels, pytest, smoke
-./install.sh    # install the CLI and the built wheels
-./publish.sh    # dry run: full gates + predicted version
+./build.sh      # the gate: format, lint, test, wheels, Python tests, WASM parity
+./wasm.sh       # build the WebAssembly module and compare it with Python
+./install.sh    # install the program and the wheels
+./publish.sh    # a test run of a release
 ./publish.sh --real
 ```
 
-`build.sh` needs no weights: checkpoint-dependent Rust tests skip themselves when
-`ref/` is empty, and the parity suite skips without `transformers`. It fails if it
-modifies the checkout. `publish.sh` requires a clean, pushed `main`; it syncs the
-version across manifests, tags once via `gitnextver`, then uploads —
-`bananamendr` to crates.io and PyPI, then `bananamendy` to PyPI.
+The gate needs no model weights: the Rust tests that need a checkpoint skip
+themselves when `ref/` is empty, and the parity test against `transformers` skips
+itself without `torch`. `build.sh` fails if it changes any file in the repository.
 
-## License
+The WebAssembly parity test does need the Nano checkpoint. It compares the browser
+build with the Python module on the model facts, the token ids, the chat format,
+the greedy answers and the top scores. Run `./wasm.sh --refresh` after each change
+to the Rust code, and commit the new module in `docs/assets/wasm/`.
+
+See [Build and release](https://code.twardoch.com/bananamend/develop/) for the
+complete description.
+
+## Files
+
+```
+crates/bananamendr/       the engine and the `bananamendr` program
+crates/bananamendr-py/    the Python extension module, published as `bananamendr`
+crates/bananamendr-wasm/  the WebAssembly bindings
+bananamendy/              the Python package: models, config, engine, server, CLI
+docs/                     the documentation site and the prebuilt WebAssembly module
+tests/                    parity against transformers, and parity against the browser build
+scripts/                  versions, artifact inspection, and model download
+ref/                      checkpoints; git ignores them
+```
+
+## Licence
 
 Apache-2.0

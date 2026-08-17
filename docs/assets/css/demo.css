@@ -1,0 +1,158 @@
+/* this_file: docs/assets/css/demo.css
+ *
+ * Layout for the demonstration page.
+ *
+ * daisyUI gives the components (card, button, select, progress, stats). It comes
+ * from a CDN as plain CSS, and it needs no build step. daisyUI does not give the
+ * layout utilities of Tailwind, so the few rows and grids below are written here.
+ */
+
+.bananamend-demo,
+.milkwash-demo {
+  margin: 1.5rem 0;
+  display: grid;
+  gap: 1rem;
+}
+
+/* One row of controls. The row wraps on a narrow screen. */
+.bananamend-demo .demo-row,
+.milkwash-demo .demo-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.9rem;
+  align-items: center;
+}
+
+.bananamend-demo .label,
+.milkwash-demo .label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0;
+}
+
+.bananamend-demo .demo-number,
+.milkwash-demo .demo-number {
+  width: 6.5rem;
+}
+
+.bananamend-demo textarea,
+.milkwash-demo textarea {
+  font-family: inherit;
+  line-height: 1.5;
+  min-height: 4.5rem;
+}
+
+.demo-status[data-kind="error"] {
+  background-color: var(--color-error, #d64545);
+  color: var(--color-error-content, #fff);
+}
+
+.demo-status[data-kind="ok"] {
+  background-color: var(--color-success, #2e7d5b);
+  color: var(--color-success-content, #fff);
+}
+
+.demo-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+}
+
+/* The stat blocks must scroll sideways on a narrow screen, and never push the
+   page wider than the window. */
+.demo-stats {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.demo-stat-value {
+  font-size: 1rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.bananamend-demo progress,
+.milkwash-demo progress {
+  flex: 1 1 14rem;
+}
+
+.demo-output {
+  min-height: 3.5rem;
+  max-height: 26rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  padding: 0.9rem 1rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+/* The chunk cards of the milkwash demonstration. */
+.demo-chunks {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.demo-chunks .chunk-facts {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.demo-chunks .chunk-prompt {
+  font-size: 0.78rem;
+  font-style: italic;
+  opacity: 0.9;
+  margin: 0.15rem 0 0.4rem;
+}
+
+.demo-chunks .chunk-text {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.demo-chunks .chunk-json {
+  max-height: 20rem;
+  overflow: auto;
+}
+
+/* daisyUI gives the components, but the utility classes of Tailwind come from a
+ * build step that this site does not have. The markup uses only these few, so
+ * they are written here against the colour variables of the daisyUI theme. */
+.bg-base-100 { background-color: var(--color-base-100); }
+.bg-base-200 { background-color: var(--color-base-200); }
+.bg-base-300 { background-color: var(--color-base-300); }
+.border { border-width: 1px; border-style: solid; }
+.border-base-300 { border-color: var(--color-base-300); }
+.rounded-box { border-radius: var(--radius-box, 0.5rem); }
+.p-4 { padding: 1rem; }
+.w-full { width: 100%; }
+
+/* A fieldset from daisyUI has no border of its own. */
+.bananamend-demo .fieldset,
+.milkwash-demo .fieldset {
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--color-base-300);
+  border-radius: var(--radius-box, 0.5rem);
+  padding: 1rem;
+}
+
+.bananamend-demo .fieldset-legend,
+.milkwash-demo .fieldset-legend {
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0 0.35rem;
+}
+
+.bananamend-demo fieldset:disabled,
+.milkwash-demo fieldset:disabled {
+  opacity: 0.55;
+}
+
+/* `display: flex` and `display: grid` above win against the `hidden` attribute,
+ * so an element that the page hides would still be visible. This rule restores
+ * the meaning of `hidden`. */
+.bananamend-demo [hidden],
+.milkwash-demo [hidden] {
+  display: none !important;
+}

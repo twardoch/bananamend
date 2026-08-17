@@ -23,7 +23,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
       - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: latest
       - name: Build and test everything
         run: ./build.sh
       - name: Upload build log on failure

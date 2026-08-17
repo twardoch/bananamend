@@ -1,0 +1,6 @@
+# this_file: .cargo/config.toml
+[target.wasm32-unknown-unknown]
+# `getrandom` 0.3 must know which source of random numbers to use in a browser.
+# `tokenizers` and `ahash` bring it in. Without this flag the WebAssembly build
+# stops with an error.
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']

@@ -7,6 +7,7 @@
 //! identical and simple enough to render directly instead of pulling in a Jinja
 //! engine; `chat_template_parity` in the test suite pins that equivalence.
 
+#[cfg(feature = "std-fs")]
 use std::path::Path;
 
 use serde::Deserialize;
@@ -52,6 +53,8 @@ pub struct Tokenizer {
 }
 
 impl Tokenizer {
+    /// Reads `tokenizer.json` and, if it is present, `tokenizer_config.json`.
+    #[cfg(feature = "std-fs")]
     pub fn from_dir(dir: &Path) -> Result<Self, Error> {
         let tokenizer_path = dir.join("tokenizer.json");
         let inner = HfTokenizer::from_file(&tokenizer_path)
@@ -67,6 +70,27 @@ impl Tokenizer {
             Err(e) => return Err(Error::io(&config_path, e)),
         };
 
+        Ok(Self {
+            inner,
+            bos_token: config.bos_token,
+            eos_token: config.eos_token,
+        })
+    }
+
+    /// Builds a tokenizer from JSON text that you already have.
+    ///
+    /// `tokenizer_config` gives the names of the two special tokens. Give `None`
+    /// to use the default names, which all three checkpoints use.
+    pub fn from_json(tokenizer_json: &str, tokenizer_config: Option<&str>) -> Result<Self, Error> {
+        let inner = HfTokenizer::from_bytes(tokenizer_json.as_bytes())
+            .map_err(|e| Error::Tokenizer(e.to_string()))?;
+        let config: TokenizerConfig = match tokenizer_config {
+            Some(text) => serde_json::from_str(text)?,
+            None => TokenizerConfig {
+                bos_token: default_bos(),
+                eos_token: default_eos(),
+            },
+        };
         Ok(Self {
             inner,
             bos_token: config.bos_token,

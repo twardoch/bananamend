@@ -4,130 +4,187 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repository is
 
-CPU inference for the BananaMind-2 chat checkpoints (Nano, Mini, Pro Preview) in
-Rust, callable from Python, with no PyTorch at runtime. It reads the published
-`model.safetensors` and `tokenizer.json` directly.
+Local inference for the BananaMind-2 chat checkpoints (Nano, Mini, Pro Preview).
+The engine is Rust, and it reads the published `model.safetensors` and
+`tokenizer.json` directly. PyTorch is not necessary at any time.
 
-| Package | Language | Registries | Role |
-| --- | --- | --- | --- |
-| `bananamendr` | Rust (lib + bin, PyO3 abi3-py39) | crates.io + PyPI | runtime, `bananamendr` CLI, extension module |
-| `bananamendy` | Python (Fire CLI, FastAPI) | PyPI | downloads, config, engine, OpenAI-compatible server |
+| Product | Language | Registry | Function |
+|:--------|:---------|:---------|:---------|
+| `bananamendr` | Rust (library and program, plus a PyO3 abi3-py39 module) | crates.io and PyPI | the engine and the command line |
+| `bananamendr-wasm` | Rust (WebAssembly) | none; `publish = false` | the same engine in a browser |
+| `bananamendy` | Python (Fire, FastAPI) | PyPI | downloads, configuration, and the server |
 
-**The division of labour is the main design decision here: `bananamendr` takes
-explicit paths and never touches the network. Downloading, caching, config files
-and the server live in `bananamendy`.** Don't add HTTP or a model registry to the
-Rust side.
+**The division of work is the main design decision here: `bananamendr` takes a
+path and nothing else, and it makes no network request.** Downloads, a cache, a
+configuration file and the server are in `bananamendy`. Do not add HTTP or a model
+registry to the Rust side.
 
-## Names: what may be renamed and what may not
+## Names: what you may rename, and what you may not
 
-The packages are `bananamend*`. The **model identifiers are upstream and must not
-be renamed**: `BananaMind2NanoForCausalLM`, `model_type = "bananamind2_nano"`,
-and the `BananaMind/BananaMind-2-*-Chat` Hugging Face repo ids all have to match
-the published `config.json` or nothing loads. `crates/bananamendr/src/config.rs`
-and `crates/bananamendr/tests/checkpoint.rs` both depend on that.
+The packages are `bananamend*`. The **model identifiers are from upstream, and you
+must not rename them**: `BananaMind2NanoForCausalLM`,
+`model_type = "bananamind2_nano"`, and the `BananaMind/BananaMind-2-*-Chat`
+repository names must all match the published `config.json`, or nothing loads.
+`crates/bananamendr/src/config.rs`, `crates/bananamendr/tests/checkpoint.rs`,
+`bananamendy/src/bananamendy/models.py` and the demonstration page all depend on
+that.
 
 ## Commands
 
 ```bash
-./build.sh                  # the gate: fmt, clippy, cargo test + doctests, wheels, pytest, smoke
-./install.sh                # CLI into ~/.local/bin, wheels into uv's system Python
-./publish.sh                # dry run: preflight + all gates + predicted version
-./publish.sh --real         # irreversible: tag, push, upload to crates.io + PyPI
-scripts/fetch_models.sh nano  # checkpoints into ref/ for the Rust tests (needs git-lfs)
+./build.sh                        # the gate: fmt, clippy, tests, wheels, pytest, WASM parity
+BANANAMEND_SKIP_WASM=1 ./build.sh # the same, without the WebAssembly step
+./wasm.sh                         # build the WebAssembly module and compare it with Python
+./wasm.sh --refresh               # the same, and write the module into docs/assets/wasm/
+./install.sh                      # the program into ~/.local/bin, the wheels into system Python
+./publish.sh                      # a test run of a release
+./publish.sh --real               # a release; it cannot be undone
+scripts/fetch_models.sh nano      # checkpoints into ref/ for the Rust tests (needs git-lfs)
 ```
 
-Narrower loops:
+Narrow loops:
 
 ```bash
 cargo test --workspace
 cargo test -p bananamendr --doc
+cargo build -p bananamendr --no-default-features --features wasm   # the browser form
 cargo clippy --all-targets --no-deps -- -D warnings
-cargo run --release -p bananamendr -- info -m ref/BananaMind-2-Nano-Chat
+cargo run --release -p bananamendr -- info -m "$(bananamendy where nano)"
 
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python -e ./crates/bananamendr-py -e ./bananamendy pytest httpx
 .venv/bin/python -m pytest bananamendy/tests -q
 .venv/bin/python -m pytest bananamendy/tests/test_server.py::test_chat_completion_when_streaming_then_sse_with_done -q
+BANANAMEND_CHECKPOINT=/path/to/checkpoint ./wasm.sh
 ```
 
-`build.sh` needs no weights, and it fails if it leaves the checkout modified —
-the release flow depends on the build being a pure function of the tree.
+`build.sh` needs no weights, and it fails if it leaves the checkout modified. The
+release runs the build two times and compares the tree, so that property is
+load-bearing.
 
 ## Architecture
 
-**Rust side** (`crates/bananamendr/src/`): `weights.rs` memory-maps the
-safetensors (all published BananaMind-2 tensors are F32), `config.rs` parses
-`config.json`, `model.rs` is the decoder (RMSNorm pre-norm blocks, grouped-query
-attention, RoPE), `ops.rs` holds the rayon-parallel kernels, `sample.rs` the
-sampling and RNG, `tokenizer.rs` wraps `tokenizers` plus the chat template, and
-`lib.rs` composes them into `Pipeline`. `main.rs` is the CLI in the same crate so
-`cargo install bananamendr` ships the binary.
+**The engine** (`crates/bananamendr/src/`): `weights.rs` reads the safetensors
+(all published tensors are F32; `load` maps a file, `from_bytes` takes bytes),
+`config.rs` parses `config.json`, `model.rs` is the decoder (RMSNorm pre-norm
+blocks, grouped-query attention, RoPE), `ops.rs` holds the kernels, `sample.rs`
+the sampling and the random numbers, `tokenizer.rs` wraps `tokenizers` and renders
+the chat format, and `lib.rs` composes them into `Pipeline`. `main.rs` is the
+command line in the same crate, so `cargo install bananamendr` gives the program.
 
-**Extension module** (`crates/bananamendr-py/`): `Model` wraps `Pipeline`.
-Without an `on_token` callback the GIL is released for the whole decode; with one
-the GIL is held and the callback is invoked as `(decoded_delta, token_id)` per
-step. `publish = false` for crates.io — a `cdylib` is not usable as a Rust
-dependency; it ships as a wheel only.
+**The features are what make three targets possible.** `std-fs` gives the file
+loaders. `parallel` gives rayon. `cli` gives the program. The tokenizer needs
+exactly one library for regular expressions: `onig` (C, the default) or `wasm`
+(Rust, for a browser). A browser build is
+`--no-default-features --features wasm`, and it uses `Pipeline::from_parts`, which
+takes the four parts of a checkpoint in memory.
 
-**Python side** (`bananamendy/src/bananamendy/`):
+Two more browser rules, both learned from a failure:
 
-- `models.py` — alias table, `resolve()` and `pull()`. A path that exists wins
-  over the alias table, then the HF cache is consulted **offline first**, and only
-  then is a download attempted. Weights go in the ordinary HF cache, not a
-  bananamend-specific directory.
-- `config.py` — frozen dataclass; TOML under `platformdirs`, then `BANANAMENDY_*`
-  environment overrides. `Config.sampling()` is the bridge to `bananamendr`'s
-  keyword names; if you add a knob, add it there.
-- `engine.py` — caches loaded checkpoints by resolved path and **serialises every
-  generation on one lock**. Streaming runs the generation on a worker thread whose
-  callback pushes deltas into a `queue.Queue`; errors raised on the worker are
-  re-raised in the consumer after the deltas already produced.
-- `server.py` — the OpenAI-compatible surface, built by `create_app(config,
-  engine)` so tests inject a fake engine and need no weights. Request parameters
-  override config defaults, not OpenAI's.
-- `cli.py` — Fire; every command takes an optional model name and falls back to
-  config.
+- `std::time::Instant` panics in WebAssembly. `lib.rs` uses `web_time::Instant`
+  for `target_arch = "wasm32"`. Do not put a bare `std::time` call in the engine.
+- `getrandom` needs a backend in a browser. `.cargo/config.toml` gives
+  `--cfg getrandom_backend="wasm_js"`, and the WebAssembly crate depends on
+  `getrandom` with the `wasm_js` feature for that target.
 
-Single-flight generation is a property of CPU inference in one process, not an
-oversight. Do not add a worker pool expecting parallel decodes.
+**The extension module** (`crates/bananamendr-py/`): `Model` wraps `Pipeline`.
+Without an `on_token` callback the interpreter lock is released for the complete
+decode; with one the lock is held, and the callback receives
+`(decoded_delta, token_id)` for each step. `publish = false` for crates.io,
+because a `cdylib` has no use as a Rust dependency.
+
+**The WebAssembly bindings** (`crates/bananamendr-wasm/`): the same shape as the
+Python module, and deliberately so. `logits` must not add a token that the Python
+module does not add, and `applyChatTemplate` must give the text while `chatTokens`
+gives the ids. The parity test compares both sides, and a difference in this file
+is what it finds.
+
+**The Python side** (`bananamendy/src/bananamendy/`):
+
+- `models.py` — the alias table, `resolve()` and `pull()`. A path that exists wins
+  over the alias table, then the Hugging Face cache is read **offline first**, and
+  only then is a download attempted. Weights go in the ordinary cache.
+- `config.py` — a frozen dataclass; TOML under `platformdirs`, then
+  `BANANAMENDY_*` from the environment. `Config.sampling()` is the bridge to the
+  keyword names of `bananamendr`. A new control goes there.
+- `engine.py` — it keeps each loaded checkpoint by resolved path, and it lets
+  **one generation run at a time**. Streaming runs the generation on a worker
+  thread whose callback puts the pieces into a `queue.Queue`; an error on the
+  worker is raised again in the consumer after the pieces that it already gave.
+- `server.py` — the OpenAI interface. `create_app(config, engine)` takes an
+  engine, so a test injects a false one and needs no weights. A parameter that a
+  request does not give comes from the configuration.
+- `cli.py` — Fire. Each command takes an optional model name.
+
+One generation at a time is a property of the interpreter lock, and not an
+oversight. Do not add a pool of workers and expect more speed.
+
+## The WebAssembly module and the site
+
+`docs/` is a Jekyll site for GitHub Pages. It loads the Just the Docs theme with
+`remote_theme`, and the demonstration page loads daisyUI from a CDN. The repository
+holds no copy of either one. daisyUI gives the components only; the few Tailwind
+utility classes that the markup uses are written in `docs/assets/css/demo.css`.
+
+`docs/assets/wasm/` holds the prebuilt module, and `docs/assets/wasm/VERSION` holds
+its version. `build.sh` compares that version with the manifests and fails if they
+differ. `./wasm.sh --refresh` writes a new module; commit the result.
+
+The demonstration page downloads the Nano checkpoint from
+`https://huggingface.co/BananaMind/BananaMind-2-Nano-Chat/resolve/main`. Hugging
+Face answers those requests with permissive CORS headers, which is what makes the
+page possible.
 
 ## Release mechanics
 
-The **git tag is the single source of truth** for the version.
-`scripts/release-manifests.py` is the only thing allowed to move version numbers
-in tracked files; it keeps the workspace version, the `bananamendr` path-dependency
-pin, `bananamendy/pyproject.toml` (its own version and the `bananamendr==` pin)
-and `bananamendy/__init__.py` identical. `publish.sh` enforces:
+The **git tag is the only source of the version number**.
+`scripts/release-manifests.py` is the only program that may change a version in a
+tracked file. It keeps the workspace version and its pin, the WebAssembly pin,
+`bananamendy/pyproject.toml` (its own version and the `bananamendr==` pin) and
+`bananamendy/__init__.py` identical. Each version site must match exactly one
+line.
 
-- branch `main`, upstream `origin/main`, remote not ahead, no unresolved conflicts
-- next version mirrors `gitnextver`: highest `v*` tag plus one patch, or `1.0.0`
-  when no tags exist
-- gates run at the *current* version, then manifests sync to the *target*
-  version, then `build.sh` runs again; a diff outside the manifest allowlist aborts
-- `uvx gitnextver@1.0.1` makes the single commit + tag + push. It only tags when
-  the tree is dirty, which the manifest sync guarantees — do not commit the sync
-  yourself, or nothing gets tagged
-- uploads last, in dependency order: crates.io `bananamendr`, PyPI `bananamendr`,
-  PyPI `bananamendy`, each waited on until the registry serves it
+`publish.sh` holds these rules:
 
-`CARGO_REGISTRY_TOKEN` and `UV_PUBLISH_TOKEN` are required for `--real`.
+- branch `main`, upstream `origin/main`, a remote that is not in front, no conflicts
+- the next version follows `gitnextver`: the highest `v` tag plus one patch, or
+  `1.0.0` when the repository has no tag
+- the gates run at the current version; then the manifests move to the target
+  version; then the WebAssembly module is built again; then `build.sh` runs. A
+  change to a file outside the allowlist stops the release. The allowlist is a
+  limit and not an exact list, because a rebuild can give identical bytes.
+- `uvx gitnextver@1.0.1` makes the one commit, the one tag and the one push. It
+  makes a tag only when the tree is dirty, and the version change is that change.
+  Do not commit the version change yourself.
+- the uploads are last and in order: crates.io `bananamendr`, PyPI `bananamendr`,
+  PyPI `bananamendy`. The script waits for each registry.
 
-## Conventions
+`CARGO_REGISTRY_TOKEN` and `UV_PUBLISH_TOKEN` are necessary for `--real`.
 
-- Every source file carries a `this_file:` path record near the top. Update it
-  when moving files.
-- MSRV is 1.87 (`u32::is_multiple_of`), edition 2024. Clippy runs with
-  `-D warnings`, and `clippy::incompatible_msrv` will catch a newer API.
-- `pyo3/extension-module` must stay out of the default Cargo features; maturin
-  enables it per build.
-- Tests must not need weights or a network. Rust checkpoint tests skip when
-  `ref/` is empty; `tests/test_parity.py` skips without `transformers`;
-  `bananamendy` tests stub the model and the hub.
+Two traps that cost time before:
 
-## `_priv/` is private and stays private
+- `comm` needs `LC_ALL=C` when the input came from `LC_ALL=C sort`. Without it the
+  allowlist check reports a file that is in the list.
+- cargo does not always rebuild a WebAssembly artifact after a version change.
+  `wasm.sh` removes the previous artifact of that crate first.
 
-`_priv/` holds the original `bananamind` prototype and, under `_priv/**/ref/`,
-downloaded checkpoints and upstream repositories with their own licenses. It is
-git-ignored; do not copy weights, `ref/`, or prototype notes (`WORK.md`,
+Before a real release, test the target version in a clone: tag it, run `sync`,
+commit, and run `build.sh`. The normal test run only builds the current version.
+
+## Style rules for this repository
+
+- Prose in Markdown files uses ASD-STE100 Simplified Technical English: short
+  sentences, the active voice, one instruction in one sentence, and no idiom.
+- Every source file holds a `this_file:` line near the top. Update it when you
+  move a file.
+- Tests must not need a network. Tests that need weights skip themselves.
+- MSRV is 1.87, edition 2024. Clippy runs with `-D warnings`, and
+  `clippy::incompatible_msrv` catches a newer API.
+
+## `_priv/` is private
+
+`_priv/` holds the first `bananamind` prototype and, under `_priv/**/ref/`,
+downloaded checkpoints and other people's repositories with their own licences. Git
+ignores it. Do not copy weights, `ref/`, or the prototype notes (`WORK.md`,
 `IDEA.md`, `ANALYSIS.md`, `PLAN.md`, `TODO.md`) into the public tree. Use
-`bananamendy pull` or `scripts/fetch_models.sh` to get checkpoints instead.
+`bananamendy pull` or `scripts/fetch_models.sh` to get checkpoints.

@@ -1,18 +1,21 @@
 //! this_file: crates/bananamendr/src/weights.rs
 //!
-//! Loads `model.safetensors` into owned, shape-checked f32 tensors.
+//! Reads `model.safetensors` into owned, shape-checked f32 tensors.
 //!
-//! The file is memory-mapped for reading and the mapping is dropped once the
-//! tensors are materialised, so peak resident memory stays at roughly one copy
-//! of the checkpoint. All published BananaMind-2 tensors are F32; anything else
-//! is rejected rather than silently converted.
+//! `load` opens a file and maps it into memory. The mapping goes away when the
+//! tensors are complete, so the memory in use stays at approximately one copy of
+//! the checkpoint. `from_bytes` does the same work on bytes that you already
+//! have; a browser uses it, because a browser has no files.
+//!
+//! All published BananaMind-2 tensors are F32. The reader refuses a different
+//! type; it does not convert it.
 
 use std::collections::HashMap;
-use std::fs::File;
-use std::path::Path;
 
-use memmap2::Mmap;
 use safetensors::{Dtype, SafeTensors};
+
+#[cfg(feature = "std-fs")]
+use std::path::Path;
 
 use crate::error::Error;
 
@@ -26,12 +29,19 @@ pub struct Weights {
 }
 
 impl Weights {
+    /// Reads a checkpoint file. The file is mapped into memory for reading.
+    #[cfg(feature = "std-fs")]
     pub fn load(path: &Path) -> Result<Self, Error> {
-        let file = File::open(path).map_err(|e| Error::io(path, e))?;
-        // SAFETY: the checkpoint is a read-only file we do not mutate; the
-        // mapping is confined to this function.
-        let mmap = unsafe { Mmap::map(&file) }.map_err(|e| Error::io(path, e))?;
-        let file = SafeTensors::deserialize(&mmap)?;
+        let file = std::fs::File::open(path).map_err(|e| Error::io(path, e))?;
+        // SAFETY: the checkpoint is a read-only file that we do not change, and
+        // the mapping does not leave this function.
+        let mmap = unsafe { memmap2::Mmap::map(&file) }.map_err(|e| Error::io(path, e))?;
+        Self::from_bytes(&mmap)
+    }
+
+    /// Reads a checkpoint from bytes that you already have.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+        let file = SafeTensors::deserialize(bytes)?;
 
         let mut tensors = HashMap::new();
         for (name, view) in file.tensors() {
