@@ -1,0 +1,70 @@
+# this_file: .github/workflows/pypi-upload.yml
+# Uploads wheels/sdists that were built on a developer machine to PyPI through
+# Trusted Publishing (no token). scripts/pypi-upload.sh attaches the files to a
+# *draft* GitHub release named pypi-staging-<UTC stamp>-<pid> and dispatches this
+# workflow. Drafts create no git tag, so tag-derived versions are untouched.
+# The draft is deleted after a successful upload; on failure it stays for a retry.
+name: PyPI upload
+
+run-name: PyPI upload ${{ inputs.release }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Draft release holding the files, e.g. pypi-staging-20261116230000-123"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-upload-${{ inputs.release }}
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+        run: |
+          if [[ ! "$RELEASE" =~ ^pypi-staging-[0-9]{14}-[0-9]+$ ]]; then
+            echo "::error::'$RELEASE' is not a pypi-staging draft name"; exit 1
+          fi
+          gh release download "$RELEASE" -R "$GITHUB_REPOSITORY" -p '*.whl' -p '*.tar.gz' -D dist
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  pypi:
+    needs: fetch
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+  cleanup:
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete "${{ inputs.release }}" -R "$GITHUB_REPOSITORY" --yes

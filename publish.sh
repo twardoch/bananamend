@@ -115,8 +115,8 @@ read_only_preflight() {
             printf 'CARGO_REGISTRY_TOKEN is required for a real release.\n' >&2
             return 1
         }
-        [[ -n "${UV_PUBLISH_TOKEN:-}" ]] || {
-            printf 'UV_PUBLISH_TOKEN is required for a real release.\n' >&2
+        gh auth status >/dev/null 2>&1 || {
+            printf 'gh must be logged in: PyPI uploads go through scripts/pypi-upload.sh (Trusted Publishing).\n' >&2
             return 1
         }
     fi
@@ -261,8 +261,8 @@ pre_mutation_gates() {
     [[ "$MODE" == "dry-run" ]] && dirty=(--allow-dirty)
     cargo publish --manifest-path "$ROOT/Cargo.toml" --dry-run -p bananamendr "${dirty[@]+"${dirty[@]}"}"
     python_package_gate "$CURRENT_VERSION" current
-    uv publish --dry-run "$R_WHEEL" "$R_SDIST"
-    uv publish --dry-run "$Y_WHEEL" "$Y_SDIST"
+    "$ROOT/scripts/pypi-upload.sh" --dry-run "$R_WHEEL" "$R_SDIST"
+    "$ROOT/scripts/pypi-upload.sh" --dry-run "$Y_WHEEL" "$Y_SDIST"
 }
 
 assert_manifest_diff() {
@@ -412,18 +412,18 @@ publish_all() {
 
     PHASE="python-final-gate"
     python_package_gate "$TARGET_VERSION" release
-    uv publish --dry-run "$R_WHEEL" "$R_SDIST"
-    uv publish --dry-run "$Y_WHEEL" "$Y_SDIST"
+    "$ROOT/scripts/pypi-upload.sh" --dry-run "$R_WHEEL" "$R_SDIST"
+    "$ROOT/scripts/pypi-upload.sh" --dry-run "$Y_WHEEL" "$Y_SDIST"
 
     # bananamendr first: bananamendy pins bananamendr=={version} and must be
     # installable the moment it appears.
     PHASE="upload-python-bananamendr"
-    uv publish "$R_WHEEL" "$R_SDIST"
+    "$ROOT/scripts/pypi-upload.sh" "$R_WHEEL" "$R_SDIST"
     wait_for_python bananamendr "$TARGET_VERSION"
     COMPLETED+=("PyPI bananamendr@$TARGET_VERSION")
 
     PHASE="upload-python-bananamendy"
-    uv publish "$Y_WHEEL" "$Y_SDIST"
+    "$ROOT/scripts/pypi-upload.sh" "$Y_WHEEL" "$Y_SDIST"
     wait_for_python bananamendy "$TARGET_VERSION"
     COMPLETED+=("PyPI bananamendy@$TARGET_VERSION")
 }
